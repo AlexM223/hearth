@@ -9,7 +9,7 @@ id: ingle-hearth
 icon: https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/icon.svg
 category: bitcoin
 name: Hearth
-version: "0.1.1"
+version: "0.1.2"
 tagline: Come navigate Bitcoin with me
 description: >-
   Hearth is the always-watching Bitcoin wallet for the people you trust: you
@@ -49,12 +49,12 @@ description: >-
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
 releaseNotes: >-
-  0.1.1 -- polish from the first round of live testing: every page now has
-  a proper browser-tab title; a fresh install's home screen points you at
-  importing a wallet instead of dead-end Send/Receive buttons; the
-  household card no longer reads "0 members" when it's just you; the
-  explorer's mempool visualization no longer overlaps its own labels on a
-  busy mempool; the top-bar search hint is no longer cut off mid-word.
+  0.1.2 -- wallet history now shows an approximate age next to each
+  confirmation ("block 731,097 · ~4 y ago"), and the mining page's off-state
+  is honest and quiet: no placeholder hashrate/best-share panels before your
+  first share, the pool card says plainly that nothing is listening yet, and
+  the owner panel explains how to start the engine instead of implying your
+  node is down.
 developer: Alex Martinez
 website: https://github.com/AlexM223/hearth
 dependencies:
