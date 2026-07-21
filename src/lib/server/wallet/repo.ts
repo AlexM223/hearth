@@ -253,3 +253,175 @@ export function listDraftRows(walletId: number): DraftRow[] {
 		.all(walletId) as unknown as DraftDbRow[];
 	return rows.map(hydrateDraft);
 }
+
+// -------------------------------------------------- scan/snapshot persistence
+
+export interface PersistAddress {
+	chain: 0 | 1;
+	index: number;
+	address: string;
+	scripthash: string;
+	scriptPubKey: string;
+	used: boolean;
+	firstSeenHeight: number | null;
+}
+export interface PersistUtxo {
+	txid: string;
+	vout: number;
+	valueSats: number;
+	chain: 0 | 1;
+	index: number;
+	address: string;
+	height: number;
+	coinbase: boolean;
+	unconfirmedTrust: 'own-change' | 'received' | null;
+}
+export interface PersistTx {
+	txid: string;
+	height: number;
+	blockTime: number | null;
+	deltaSats: number;
+	feeSats: number | null;
+}
+
+/** Atomically replace a wallet's scan-derived rows + snapshot (wipe-safe cache).
+ *  All rows are rewritten in one transaction so a reader never sees a torn scan. */
+export function persistScan(
+	walletId: number,
+	data: {
+		addresses: PersistAddress[];
+		utxos: PersistUtxo[];
+		transactions: PersistTx[];
+		snapshotJson: string;
+		summaryJson: string | null;
+		receiveCursor: number;
+		changeCursor: number;
+		lastSyncedAtMs: number;
+	}
+): void {
+	withTransaction((db) => {
+		db.prepare('DELETE FROM addresses WHERE wallet_id = ?').run(walletId);
+		db.prepare('DELETE FROM utxos WHERE wallet_id = ?').run(walletId);
+		db.prepare('DELETE FROM transactions WHERE wallet_id = ?').run(walletId);
+
+		const insAddr = db.prepare(
+			`INSERT INTO addresses (wallet_id, chain, address_index, address, scripthash, script_pubkey, used, first_seen_height)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		);
+		for (const a of data.addresses) {
+			insAddr.run(
+				walletId,
+				a.chain,
+				a.index,
+				a.address,
+				a.scripthash,
+				a.scriptPubKey,
+				a.used ? 1 : 0,
+				a.firstSeenHeight
+			);
+		}
+		const insUtxo = db.prepare(
+			`INSERT INTO utxos (wallet_id, txid, vout, value_sats, chain, address_index, address, height, coinbase, unconfirmed_trust)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		);
+		for (const u of data.utxos) {
+			insUtxo.run(
+				walletId,
+				u.txid,
+				u.vout,
+				u.valueSats,
+				u.chain,
+				u.index,
+				u.address,
+				u.height,
+				u.coinbase ? 1 : 0,
+				u.unconfirmedTrust
+			);
+		}
+		const insTx = db.prepare(
+			`INSERT INTO transactions (wallet_id, txid, height, block_time, delta_sats, fee_sats)
+			 VALUES (?, ?, ?, ?, ?, ?)`
+		);
+		for (const t of data.transactions) {
+			insTx.run(walletId, t.txid, t.height, t.blockTime, t.deltaSats, t.feeSats);
+		}
+
+		db.prepare('UPDATE wallets SET receive_cursor = ?, change_cursor = ? WHERE id = ?').run(
+			data.receiveCursor,
+			data.changeCursor,
+			walletId
+		);
+		db.prepare(
+			`INSERT INTO wallet_snapshots (wallet_id, snapshot, summary, last_synced_at, dirty_since)
+			 VALUES (?, ?, ?, ?, NULL)
+			 ON CONFLICT(wallet_id) DO UPDATE SET snapshot = excluded.snapshot,
+			   summary = excluded.summary, last_synced_at = excluded.last_synced_at, dirty_since = NULL`
+		).run(walletId, data.snapshotJson, data.summaryJson, data.lastSyncedAtMs);
+		return null;
+	});
+}
+
+interface SnapshotRow {
+	snapshot: string;
+	summary: string | null;
+	last_synced_at: number;
+	dirty_since: number | null;
+}
+
+export function readSnapshotRow(
+	walletId: number
+): { snapshot: unknown; summary: unknown; lastSyncedAt: number; dirtySince: number | null } | null {
+	const row = getDb()
+		.prepare('SELECT snapshot, summary, last_synced_at, dirty_since FROM wallet_snapshots WHERE wallet_id = ?')
+		.get(walletId) as SnapshotRow | undefined;
+	if (!row) return null;
+	return {
+		snapshot: JSON.parse(row.snapshot),
+		summary: row.summary ? JSON.parse(row.summary) : null,
+		lastSyncedAt: row.last_synced_at,
+		dirtySince: row.dirty_since
+	};
+}
+
+/** Mark a wallet's snapshot dirty (a subscribed scripthash changed). Idempotent. */
+export function markSnapshotDirty(walletId: number, ms: number): void {
+	getDb()
+		.prepare(
+			'UPDATE wallet_snapshots SET dirty_since = ? WHERE wallet_id = ? AND dirty_since IS NULL'
+		)
+		.run(ms, walletId);
+}
+
+interface UtxoDbRow {
+	txid: string;
+	vout: number;
+	value_sats: number;
+	chain: 0 | 1;
+	address_index: number;
+	address: string;
+	height: number;
+	coinbase: number;
+	unconfirmed_trust: string | null;
+}
+
+/** Cached UTXOs (SWR view). The SEND path re-scans live and never trusts this. */
+export function getUtxoRows(walletId: number): UtxoDbRow[] {
+	return getDb()
+		.prepare('SELECT * FROM utxos WHERE wallet_id = ? ORDER BY value_sats DESC')
+		.all(walletId) as unknown as UtxoDbRow[];
+}
+
+interface TxDbRow {
+	txid: string;
+	height: number;
+	block_time: number | null;
+	delta_sats: number;
+	fee_sats: number | null;
+}
+export function getTransactionRows(walletId: number, limit = 50): TxDbRow[] {
+	return getDb()
+		.prepare(
+			'SELECT txid, height, block_time, delta_sats, fee_sats FROM transactions WHERE wallet_id = ? ORDER BY (height = 0) DESC, height DESC LIMIT ?'
+		)
+		.all(walletId, limit) as unknown as TxDbRow[];
+}

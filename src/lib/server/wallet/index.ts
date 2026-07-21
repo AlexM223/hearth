@@ -75,3 +75,15 @@ export {
 	parseDescriptor,
 	type ImportInput
 } from './import.js';
+
+export {
+	syncWallet,
+	markWalletDirty,
+	getBalance,
+	getSnapshot,
+	getHistory,
+	getUtxos,
+	type SyncNode,
+	type WalletSnapshot
+} from './sync.js';
+export { scanWallet, type ScanRail, type ScanResult } from './scan.js';
