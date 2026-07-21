@@ -10,7 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { openDb, closeDb, setMeta } from '../../db/index.js';
 import { runMigrations } from '../../db/migrations.js';
 import { initSecretKey, __resetSecretKeyForTests } from '../config/secrets.js';
-import { setUserChannelConfig, setInstanceSecret, initNotifyOrigin } from '../config/channelConfig.js';
+import { setUserChannelConfig, setInstanceSecret, initNotifyOrigin, encryptUserSecretField } from '../config/channelConfig.js';
 import { email, __setTransporterFactoryForTests, __resetTransporterFactoryForTests, type EmailTransporter } from './email.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -125,5 +125,29 @@ describe('T6: email channel', () => {
 		const { opts } = sent[0] as { opts: Record<string, unknown> };
 		expect(opts.host).toBe('personal.smtp.example.com');
 		expect(opts.secure).toBe(true);
+	});
+
+	it('regression (hearth-skg.11): a personal SMTP override password is ACTUALLY decrypted and used to authenticate', async () => {
+		// Previously `resolveSmtp` decrypted via decryptUserSecretField(userId,
+		// 'email', 'smtp') -- a top-level field lookup -- but the encrypted
+		// value lives nested at `smtp.passEnc`, so `pass` was silently always
+		// undefined and a personal relay requiring auth would fail every send.
+		const sent: Record<string, unknown>[] = [];
+		__setTransporterFactoryForTests(
+			(opts): EmailTransporter => ({
+				async sendMail(mail) {
+					sent.push({ opts, mail });
+					return {};
+				}
+			})
+		);
+		const passEnc = encryptUserSecretField('my-personal-relay-password');
+		setUserChannelConfig(userId, 'email', {
+			address: 'alex@example.com',
+			smtp: { host: 'personal.smtp.example.com', port: 465, user: 'alex', passEnc, tls: 'tls' }
+		});
+		await email.send(userId, { type: 'tx_received', userId, level: 'info', title: 't', body: 'b' });
+		const { opts } = sent[0] as { opts: { auth?: { user: string; pass?: string } } };
+		expect(opts.auth?.pass).toBe('my-personal-relay-password');
 	});
 });

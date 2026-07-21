@@ -6,7 +6,8 @@
  */
 import nodemailer from 'nodemailer';
 import { renderEmail } from '../queue/render.js';
-import { getUserChannelConfig, decryptUserSecretField, getInstanceMeta, getInstanceSecret, getNotifyOrigin } from '../config/channelConfig.js';
+import { getUserChannelConfig, getInstanceMeta, getInstanceSecret, getNotifyOrigin } from '../config/channelConfig.js';
+import { decryptSecret } from '../config/secrets.js';
 import type { ChannelSendResult, NotificationChannelPlugin, NotificationPayload } from '../types.js';
 
 interface EmailUserConfig {
@@ -50,7 +51,21 @@ interface ResolvedSmtp {
 
 function resolveSmtp(userId: number, cfg: EmailUserConfig): ResolvedSmtp | null {
 	if (cfg.smtp?.host) {
-		const pass = cfg.smtp.passEnc ? (decryptUserSecretField(userId, 'email', 'smtp') ?? undefined) : undefined;
+		// bug fix (hearth-skg.11): `decryptUserSecretField(userId,'email','smtp')`
+		// looked up a top-level `smtp` field, but the encrypted value actually
+		// lives one level deeper at `smtp.passEnc` -- that field-name mismatch
+		// meant a personal SMTP relay's password was NEVER decrypted (always
+		// undefined), silently sending auth-less and failing at the SMTP
+		// server. Decrypt the envelope directly; fail closed (undefined) on
+		// a decrypt error, same posture as every other secret read here.
+		let pass: string | undefined;
+		if (cfg.smtp.passEnc) {
+			try {
+				pass = decryptSecret(cfg.smtp.passEnc);
+			} catch {
+				pass = undefined;
+			}
+		}
 		const tls = cfg.smtp.tls ?? 'starttls';
 		return {
 			host: cfg.smtp.host,
