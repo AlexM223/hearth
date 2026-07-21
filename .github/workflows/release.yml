@@ -3,10 +3,17 @@ name: Release image
 # Multi-arch build + push to GHCR, on a version tag push (v0.1.0, v0.1.1,
 # ...).
 #
+# Each platform builds NATIVELY on its own runner (ubuntu-latest for amd64,
+# GitHub's free-for-public-repos ubuntu-24.04-arm for arm64) and pushes by
+# digest; a merge job then stitches both digests into the one tagged
+# manifest list. The first release attempt built arm64 under QEMU in a
+# single job and sat in emulation for 70+ minutes without finishing -- the
+# split-native pattern finishes in minutes and removes QEMU entirely.
+#
 # After a run, verify both platforms landed in the manifest list with:
 #   docker buildx imagetools inspect ghcr.io/alexm223/hearth:<version>
 # and update packaging/umbrel/hearth/docker-compose.yml's image digest
-# (currently `<to-fill-after-push>`) with the real one reported there.
+# with the real one reported there.
 
 on:
   push:
@@ -25,18 +32,19 @@ env:
   IMAGE_NAME: alexm223/hearth
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Derive version from tag
-        id: version
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       # Belt-and-suspenders: the Dockerfile's own build stage already fails
       # on any native .node addon in the pruned production tree (the
@@ -54,8 +62,59 @@ jobs:
       - name: No-native-deps guard
         run: npm run check:native
 
-      - name: Set up QEMU (arm64 emulation for the cross-arch build)
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest (${{ matrix.platform }})
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-and-smoke:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout (for the smoke-test script)
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -67,30 +126,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push multi-arch image
-        id: push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-          provenance: false
+      - name: Create the tagged manifest list from both digests
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}" \
+            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
 
       - name: Print the pushed manifest-list digest
         run: |
-          echo "Pushed digest: ${{ steps.push.outputs.digest }}"
-          echo "Full ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}@${{ steps.push.outputs.digest }}"
-          echo "::notice::Update packaging/umbrel/hearth/docker-compose.yml and packaging/store-repo/hearth-app-store/hearth/docker-compose.yml's image: line with the digest above."
+          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}"
+          digest=$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "Full ref: ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}@${digest}"
+          echo "::notice::Update packaging/umbrel/hearth/docker-compose.yml and packaging/store-repo/hearth-app-store/ingle-hearth/docker-compose.yml's image: line with the digest above."
 
       # Boot-smoke the just-pushed amd64 image on the runner itself (a real
       # pull, not the local build cache) before calling the release good.
-      # arm64 is build-verified by buildx's own per-platform build step
-      # above but not booted here -- ubuntu-latest runners are amd64-only
-      # and a QEMU-emulated boot smoke test in CI is slow/flaky enough that
-      # it is intentionally left to manual pre-submission testing rather
-      # than gating every tag push on it.
+      # arm64 booted natively during its own build job's runner? No -- it is
+      # build-verified there; a full arm64 boot smoke can be added to the
+      # arm64 build job later if it ever proves necessary.
       - name: Pull pushed image and run the boot smoke test
         run: |
           docker pull "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}"

@@ -42,15 +42,13 @@ description: >-
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
 releaseNotes: >-
-  0.1.0 -- first public release. The full M0-M6 build: the Ingle design
-  system (dark default, warm-parchment light); the node:sqlite-backed
-  module-bounded server; the one unified wallet engine (watch-only,
+  0.1.0 -- first public release: the unified wallet engine (watch-only,
   single-sig, 2-of-3+ multisig, PSBT build/review/broadcast through a single
-  code path); invite-by-link members with Owner/Member/Guest roles and a
-  captain-branded come-aboard flow; a pool-aware own-node block explorer; an
+  code path) with in-browser hardware-wallet signing (Ledger, Trezor,
+  BitBox02, air-gap file, animated QR); invite-by-link members with
+  Owner/Member/Guest roles; a pool-aware own-node block explorer; an
   off-by-default solo Stratum V1 mining pool with a first-party dashboard;
-  and the five-channel fail-closed watchtower notifier. See DECISIONS.md for
-  the full build order and the M7 store-readiness checklist.
+  and the five-channel fail-closed watchtower notifier.
 developer: Alex Martinez
 website: https://github.com/AlexM223/hearth
 dependencies:
@@ -66,8 +64,8 @@ gallery:
   - 4.jpg
   - 5.jpg
 path: ""
-# The literal bootstrap username auth/users.ts creates on first run (see the
-# store-repo copy's comment; caught live against a real first-boot).
+# The literal bootstrap username created on first run -- NOT an
+# email-shaped placeholder; verified against a real first-boot.
 defaultUsername: "admin"
 deterministicPassword: true
 backupIgnore:
@@ -75,8 +73,7 @@ backupIgnore:
   - data/tls
   - data/secret.key
 submitter: Alex Martinez
-# No official-store PR yet: Hearth ships through its own new community store
-# repo (DECISIONS.md §5.5, `AlexM223/hearth-app-store`), not a
-# getumbrel/umbrel-apps submission, so there is no upstream PR to reference.
-# Filled in if/when Alex ever submits to the official store instead.
+# No official-store PR: Hearth ships through its own community store repo
+# (`AlexM223/hearth-app-store`), not a getumbrel/umbrel-apps submission, so
+# there is no upstream PR to reference.
 submission: ""

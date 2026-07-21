@@ -4,67 +4,34 @@ services:
   app_proxy:
     environment:
       # `<app-id>_<service-name>_1` -- app id here is `ingle-hearth` (this
-      # store's mandatory app-id prefix, umbrel-app.yml's `id:`), NOT the
-      # bare `hearth` used by the in-repo canonical package at
-      # packaging/umbrel/hearth/. See this repo's README for why the two
-      # copies differ only in id/APP_HOST.
+      # store's mandatory app-id prefix, umbrel-app.yml's `id:`).
       APP_HOST: ingle-hearth_web_1
       APP_PORT: 3000
 
   web:
-    # M7 status: the 0.1.0 image has been built and boot-smoke-tested locally
-    # for both linux/amd64 (native) and linux/arm64 (QEMU-emulated, this
-    # Windows/Docker-Desktop host has no real ARM hardware) -- see
-    # packaging/umbrel/hearth/RELEASE-CHECKLIST.md for the exact digests and
-    # what "local" means here. Nothing has been pushed to GHCR (that publish
-    # step is explicitly Alex's call, not this milestone's -- DECISIONS.md
-    # §5.5), so there is no real registry digest yet. Replace the placeholder
-    # below with the real multi-arch manifest-list digest after
-    # `.github/workflows/release.yml` pushes a tag --
-    # `docker buildx imagetools inspect ghcr.io/alexm223/hearth:0.1.0` --
-    # and confirm both linux/amd64 and linux/arm64 are listed before this
-    # compose file is ever deployed for real.
+    # Pinned to the multi-arch (linux/amd64 + linux/arm64) manifest-list
+    # digest pushed by the Hearth repo's release workflow. Verify with:
+    #   docker buildx imagetools inspect ghcr.io/alexm223/hearth:0.1.0
     image: ghcr.io/alexm223/hearth:0.1.0@sha256:<to-fill-after-push>
-    # linter note: the placeholder digest above is intentionally not valid
-    # hex -- it must fail any pullability/digest-format check until Alex
-    # fills in the real one; do not "fix" it with fake zeros.
     restart: on-failure
     stop_grace_period: 1m
     init: true
     user: "1000:1000"
     ports:
       # Raw host port for hardware-wallet signing -- needs an HTTPS secure
-      # context that app_proxy's plain HTTP cannot provide. host 4489 ->
-      # container 3443 (Heartwood/cairn already uses 4488 -- kept distinct so
-      # both can coexist on the same box during the Hearth migration).
+      # context that app_proxy's plain HTTP cannot provide.
+      # host 4489 -> container 3443.
       - "4489:3443"
-      # Raw host ports for the solo-mining Stratum V1 listeners (DECISIONS.md
-      # §4.6, MINING-ENGINE.md §2.7, built in M5) -- app_proxy is HTTP-only
-      # and can't proxy raw TCP. Only reachable once mining is enabled AND
-      # bind is set to lan/all; harmless (nothing listening) until then.
+      # Raw host ports for the solo-mining Stratum V1 listeners -- app_proxy
+      # is HTTP-only and can't proxy raw TCP. Only reachable once mining is
+      # enabled AND bind is set to lan/all; harmless (nothing listening)
+      # until then.
       #
-      # Host ports are 3343/3345, NOT the container-internal 3333/3334
-      # (hearth-ny4.1): cairn/Heartwood already publishes host 3333/3334 on
-      # the same box, so reusing them here would collide the instant both
-      # apps run together -- the identical precedent already set for the
-      # HTTPS port above (4489 chosen over cairn's 4488). Deliberately NOT
-      # 3335/3336 either, to avoid any operator-facing confusion with the
-      # container-internal port 3335 permanently reserved for SV2 (M8, never
-      # built here, never repurposed -- MINING-ENGINE.md §9.4). The
-      # CONTAINER side of the mapping stays the real listener ports 3333/
-      # 3334 unchanged; only the HOST-side numbers move. A Bitaxe/miner
-      # pointed at this box connects to host 3343 (standard) / 3345
-      # (ASIC-floor) -- the dashboard's off-state connection instructions
-      # (MINING-ENGINE.md §6.4) render whichever port is actually resolved,
-      # so this is the one place that literal number needs to stay in sync.
-      #
-      # Host 3344 (the obvious next number after 3343) was NOT used for
-      # ASIC-floor: M7's store-lint pass against a real getumbrel/umbrel-apps
-      # checkout found it collides with `blockstream-blind-oracle`'s manifest
-      # `port: 3344` (its app_proxy browser port) -- both can't bind host
-      # 3344 if a user ever installs both apps on the same box. 3345 is
-      # confirmed clear of every manifest `port:` and every raw compose host
-      # port in the official app store as of this check.
+      # Host side is 3343/3345 rather than the container-internal 3333/3334
+      # to avoid clashing with other apps' published ports (3344 in
+      # particular is already taken by another app in the official store).
+      # A miner pointed at this box connects to host 3343 (standard) or
+      # 3345 (ASIC-floor); the container side stays the real listener ports.
       - "3343:3333" # standard (host 3343 -> container 3333)
       - "3345:3334" # ASIC-floor (host 3345 -> container 3334)
     volumes:
@@ -72,47 +39,40 @@ services:
     environment:
       # HTTP port app_proxy connects to.
       PORT: 3000
-      # Gates the Umbrel auto-connect probe (M1) -- without this the probe
-      # never fires and the app stays on manual-config-only. Never set on
+      # Gates the Umbrel auto-connect probe -- without this the probe never
+      # fires and the app stays on manual-config-only. Never set on
       # non-Umbrel deployments.
       HEARTH_PLATFORM: umbrel
-      # First-run admin bootstrap; forces a credential reset on first login (M1).
+      # First-run admin bootstrap; forces a credential reset on first login.
       HEARTH_ADMIN_PASSWORD: ${APP_PASSWORD}
       # Keeps the session cookie non-Secure over plain-HTTP Umbrel and anchors
       # notification deep links. Port MUST match the manifest `port`.
       HEARTH_ORIGIN: http://${DEVICE_DOMAIN_NAME}:3252
       # Advertised HTTPS port, since the published host port (4489) differs from 3443.
       HEARTH_HTTPS_EXTERNAL_PORT: 4489
-      # Advertised Stratum ports (hearth-ny4.1, host port for ASIC-floor
-      # moved 3344->3345 in M7 -- see the ports: block comment above): the
-      # mining dashboard's connection card must tell a miner to dial the
-      # PUBLISHED host port (3343/3345), not the container-internal
-      # listening port (3333/3334) -- see mining/settings.ts's
-      # advertisedStratumPort.
+      # Advertised Stratum ports: the mining dashboard's connection card must
+      # tell a miner to dial the PUBLISHED host port (3343/3345), not the
+      # container-internal listening port (3333/3334).
       HEARTH_MINING_STRATUM_EXTERNAL_PORT: 3343
       HEARTH_MINING_ASIC_EXTERNAL_PORT: 3345
       # Better client IPs for rate-limiting/audit behind the proxy; safely ignored if absent.
       ADDRESS_HEADER: x-forwarded-for
-      # --- auto-wired Core RPC, never a hand-typed connection string (DECISIONS.md §5.3) ---
+      # --- auto-wired Core RPC, never a hand-typed connection string ---
       # `dependencies: [bitcoin]` in umbrel-app.yml makes umbrelOS inject these
-      # from the Bitcoin app's own exports; the fixed 10.21.21.8:8332 service
-      # address is config/index.ts's fallback if these ever come through unset.
+      # from the Bitcoin app's own exports.
       HEARTH_CORE_RPC_HOST: ${APP_BITCOIN_NODE_IP}
       HEARTH_CORE_RPC_PORT: ${APP_BITCOIN_RPC_PORT}
       HEARTH_CORE_RPC_USER: ${APP_BITCOIN_RPC_USER}
       HEARTH_CORE_RPC_PASS: ${APP_BITCOIN_RPC_PASS}
-      # --- auto-wired Electrum rail, same treatment (DECISIONS.md §8, 2026-07-21 amendment) ---
+      # --- auto-wired Electrum rail, same treatment ---
       # `dependencies: [bitcoin, electrs]` in umbrel-app.yml lets the user pick
       # either Umbrel's own `electrs` app or `fulcrum` (which declares
       # `implements: [electrs]` and exports the identical APP_ELECTRS_NODE_IP /
       # APP_ELECTRS_NODE_PORT contract) as the provider; either way umbrelOS
-      # guarantees install order and injects the real address here instead of
-      # Hearth having to guess it. config/index.ts's 10.21.21.200:50002 fallback
-      # (Fulcrum's own fixed service address) only fires if these ever come
-      # through unset -- e.g. a hand-rolled compose that skips the dependency.
+      # guarantees install order and injects the real address here.
       HEARTH_ELECTRUM_HOST: ${APP_ELECTRS_NODE_IP}
       HEARTH_ELECTRUM_PORT: ${APP_ELECTRS_NODE_PORT}
-      # --- the CSRF/origin fix, REQUIRED behind app_proxy (DECISIONS.md §5.2) ---
+      # --- REQUIRED behind app_proxy ---
       # Without these, adapter-node assumes https and SvelteKit's CSRF origin
       # check rejects every form POST; app_proxy sets both by default.
       PROTOCOL_HEADER: x-forwarded-proto

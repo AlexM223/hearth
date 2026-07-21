@@ -1,4 +1,4 @@
-manifestVersion: 1
+﻿manifestVersion: 1
 id: ingle-hearth
 # Community-store convention differs from the official store here: `icon:`
 # is expected as a real hosted URL (the official-store skill's "omit icon"
@@ -6,7 +6,7 @@ id: ingle-hearth
 # confirmed against getumbrel/umbrel-community-app-store's own template app,
 # which sets `icon:` to a real image URL). icon.svg sits alongside this file
 # in the store repo: a 256x256 scale-up of the app's own favicon flame.
-icon: https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/icon.svg
+icon: https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/icon.svg
 category: bitcoin
 name: Hearth
 version: "0.1.0"
@@ -49,15 +49,13 @@ description: >-
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
 releaseNotes: >-
-  0.1.0 -- first public release. The full M0-M6 build: the Ingle design
-  system (dark default, warm-parchment light); the node:sqlite-backed
-  module-bounded server; the one unified wallet engine (watch-only,
+  0.1.0 -- first public release: the unified wallet engine (watch-only,
   single-sig, 2-of-3+ multisig, PSBT build/review/broadcast through a single
-  code path); invite-by-link members with Owner/Member/Guest roles and a
-  captain-branded come-aboard flow; a pool-aware own-node block explorer; an
+  code path) with in-browser hardware-wallet signing (Ledger, Trezor,
+  BitBox02, air-gap file, animated QR); invite-by-link members with
+  Owner/Member/Guest roles; a pool-aware own-node block explorer; an
   off-by-default solo Stratum V1 mining pool with a first-party dashboard;
-  and the five-channel fail-closed watchtower notifier. See DECISIONS.md for
-  the full build order and the M7 store-readiness checklist.
+  and the five-channel fail-closed watchtower notifier.
 developer: Alex Martinez
 website: https://github.com/AlexM223/hearth
 dependencies:
@@ -74,11 +72,11 @@ port: 3252
 # wired to a real node; shot 4 shows the mining dashboard's honest
 # off-state and is worth recapturing with a live regtest worker later).
 gallery:
-  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/1.jpg
-  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/2.jpg
-  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/3.jpg
-  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/4.jpg
-  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/5.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/1.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/2.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/3.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/4.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/5.jpg
 path: ""
 # The literal bootstrap username auth/users.ts creates on first run -- NOT an
 # email-shaped placeholder. Verified against a real first-boot: logging in
