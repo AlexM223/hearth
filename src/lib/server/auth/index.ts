@@ -47,3 +47,19 @@ export {
 export { API_POLICY, resolveApiPolicy, type MinRole, type Rule } from './policy.js';
 export { roleAtLeast, requireRole, requireWalletAccess } from './guard.js';
 export { touchLastActive, resetActivityThrottle } from './activity.js';
+
+export {
+	InviteError,
+	generateInviteCode,
+	hashInviteCode,
+	createInvite,
+	listInvites,
+	getInvite,
+	revokeInvite,
+	lookupActiveInvite,
+	type InviteRole,
+	type InviteState,
+	type InviteRow,
+	type CreateInviteInput,
+	type CreatedInvite
+} from './invites.js';
