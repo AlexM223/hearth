@@ -1,9 +1,26 @@
 <script lang="ts">
 	// Self profile & prefs (COME-ABOARD.md §3.2's carve-out): where a Member/
 	// Guest changes their own password since Settings is Owner-only.
+	import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
+	import { readStoredTheme, applyThemeLocally, type ThemeChoice } from '$lib/theme.js';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+
+	// Reconciled with the header ThemeToggle (UX sweep hearth-i2x): this used
+	// to read ONLY the server-persisted `prefs.theme` row, which the header
+	// toggle never wrote to -- so this could show "System" selected while the
+	// page itself was actually rendering Dark. `liveTheme` starts from the
+	// server value (SSR-safe) then, on mount, is overridden by the SAME live
+	// source the header toggle writes to (localStorage) -- the sweep's own
+	// suggested fix.
+	// svelte-ignore state_referenced_locally -- SSR-safe seed, overridden by
+	// the live localStorage value in onMount below.
+	let liveTheme = $state<ThemeChoice>(data.prefs.theme);
+	onMount(() => {
+		liveTheme = readStoredTheme();
+	});
 </script>
 
 <svelte:head>
@@ -45,18 +62,28 @@
 
 <section class="panel theme-panel">
 	<p class="t-micro">Display</p>
-	<form method="POST" action="?/setTheme">
+	<form
+		method="POST"
+		action="?/setTheme"
+		use:enhance={() => {
+			// Apply to THIS device immediately (localStorage + data-theme) --
+			// the same effect the header ThemeToggle has -- rather than waiting
+			// on the round trip; the server action below still persists it too.
+			applyThemeLocally(liveTheme);
+			return async ({ update }) => update();
+		}}
+	>
 		<fieldset class="theme-choice">
 			<label class="radio">
-				<input type="radio" name="theme" value="system" checked={data.prefs.theme === 'system'} />
+				<input type="radio" name="theme" value="system" bind:group={liveTheme} />
 				<span class="t-label">System</span>
 			</label>
 			<label class="radio">
-				<input type="radio" name="theme" value="dark" checked={data.prefs.theme === 'dark'} />
+				<input type="radio" name="theme" value="dark" bind:group={liveTheme} />
 				<span class="t-label">Dark</span>
 			</label>
 			<label class="radio">
-				<input type="radio" name="theme" value="light" checked={data.prefs.theme === 'light'} />
+				<input type="radio" name="theme" value="light" bind:group={liveTheme} />
 				<span class="t-label">Light</span>
 			</label>
 		</fieldset>

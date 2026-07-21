@@ -3,25 +3,20 @@
 	// (`hearth.theme`), applied via `data-theme` on <html> (DECISIONS.md §3).
 	// The pre-paint script in app.html handles first-load; this component
 	// keeps subsequent clicks in sync without a flash.
-	type ThemeChoice = 'system' | 'dark' | 'light';
+	//
+	// Reconciled with /me's Display form (UX sweep hearth-i2x) through the
+	// shared $lib/theme module: this is still the only control that decides
+	// what THIS device renders (localStorage stays authoritative for the
+	// pre-paint script), but every change is also best-effort mirrored to the
+	// server-persisted account preference so /me agrees with it.
+	import { readStoredTheme, applyThemeLocally, mirrorThemeToServer, type ThemeChoice } from '$lib/theme.js';
 
-	function readStored(): ThemeChoice {
-		if (typeof localStorage === 'undefined') return 'system';
-		const stored = localStorage.getItem('hearth.theme');
-		return stored === 'dark' || stored === 'light' ? stored : 'system';
-	}
-
-	let choice = $state<ThemeChoice>(readStored());
+	let choice = $state<ThemeChoice>(readStoredTheme());
 
 	function apply(next: ThemeChoice) {
 		choice = next;
-		if (next === 'system') {
-			localStorage.removeItem('hearth.theme');
-			document.documentElement.removeAttribute('data-theme');
-		} else {
-			localStorage.setItem('hearth.theme', next);
-			document.documentElement.setAttribute('data-theme', next);
-		}
+		applyThemeLocally(next);
+		void mirrorThemeToServer(next);
 	}
 
 	const order: ThemeChoice[] = ['system', 'dark', 'light'];
