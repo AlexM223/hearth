@@ -20,6 +20,13 @@ export async function POST(event: RequestEvent) {
 		throw error(400, 'expected a JSON body');
 	}
 	if (typeof body.psbt !== 'string') throw error(400, 'a signed PSBT is required');
+	// Belt-and-braces in-handler length gate (SIGNING.md §3.3): the
+	// adapter-node BODY_SIZE_LIMIT (512K) already stops a multi-MB payload at
+	// the edge with a framework 413, but a cheap length check here makes a
+	// hostile payload cheaper to reject before it ever reaches applySignature.
+	if (body.psbt.length > 700_000) {
+		throw error(400, 'That signed transaction is unexpectedly large -- check you uploaded the right file.');
+	}
 	try {
 		const { review, progress } = applySignature(user.id, walletId, draftId, body.psbt);
 		return json({ review, progress });

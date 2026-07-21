@@ -69,10 +69,14 @@ ENV PORT=3000
 # Self-signed HTTPS listener; the cert is generated at first boot into
 # /data/tls. Publish the port to enable it; an unpublished port is harmless.
 ENV HEARTH_HTTPS_PORT=3443
-# adapter-node's own default is a silent 512K, enough to 400 a legitimate
-# large multisig PSBT (many inputs, each with a full nonWitnessUtxo). 200K
-# gives headroom without opening the DoS guard too wide.
-ENV BODY_SIZE_LIMIT=200K
+# SIGNING.md §3.3: the signing surface's /sign route accepts an externally-
+# signed PSBT upload (WebHID / air-gap file / BBQr reassembly). A real PSBT,
+# even a large multisig with many inputs each carrying a full
+# nonWitnessUtxo, is a few KB; 512K is generous headroom while still
+# stopping a multi-MB garbage payload at the edge (adapter-node's own
+# default). Previously set to a tighter 200K before any route consumed a
+# PSBT-sized upload; raised now that one does.
+ENV BODY_SIZE_LIMIT=512K
 # NOTE: deliberately no ADDRESS_HEADER default here -- adapter-node throws on
 # any getClientAddress() call when the configured header is absent, which
 # would break direct (unproxied) deployments. Umbrel's docker-compose.yml

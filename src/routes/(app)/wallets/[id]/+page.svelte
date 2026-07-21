@@ -5,6 +5,8 @@
 	// broadcast path -- this screen never knows single vs multisig except as a badge.
 	import { invalidateAll } from '$app/navigation';
 	import { formatSats as fmtSats } from '$lib/format.js';
+	import SignStep from '$lib/components/sign/SignStep.svelte';
+	import type { SigningProgress } from '$lib/shared/signing.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -29,11 +31,13 @@
 	let selectedUtxos = $state<Record<string, boolean>>({});
 	let review = $state<null | {
 		draftId: number;
+		psbt: string;
 		recipients: { address: string; amountSats: number }[];
 		changeAmountSats: number | null;
 		feeSats: number;
 		vsize: number;
 		totalInputSats: number;
+		progress: SigningProgress;
 	}>(null);
 	let sendBusy = $state(false);
 	let sendError = $state<string | null>(null);
@@ -70,7 +74,7 @@
 				sendError = j.message ?? 'could not build the transaction';
 				return;
 			}
-			review = { draftId: j.draftId, ...j.review };
+			review = { draftId: j.draftId, psbt: j.psbt, ...j.review };
 		} catch {
 			sendError = 'could not build the transaction';
 		} finally {
@@ -79,14 +83,14 @@
 	}
 
 	async function confirmSend() {
-		if (!review || slide < 100) return;
+		if (!review || slide < 100 || !review.progress.complete) return;
 		sendBusy = true;
 		sendError = null;
 		try {
-			// M2: the review PSBT is unsigned. A real send attaches an external
-			// signature (hardware/air-gap) before this call; here we forward the
-			// draft to the one broadcast path, which will refuse if unsigned --
-			// surfaced honestly to the user.
+			// The signing surface (Sign step, above) already merged enough
+			// signatures into the draft server-side before the slider ever
+			// enables -- this call rides the already-signed draft to the one
+			// broadcast path.
 			const res = await fetch(`/api/wallets/${data.wallet.id}/drafts/${review.draftId}/broadcast`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -236,7 +240,19 @@
 
 			{#if sendError}<p class="err t-label">{sendError}</p>{/if}
 
-			<p class="t-label muted slide-hint">Slide to send · this is irreversible</p>
+			<SignStep
+				walletId={data.wallet.id}
+				draftId={review.draftId}
+				psbt={review.psbt}
+				bind:progress={review.progress}
+				httpsExternalPort={data.httpsExternalPort}
+			/>
+
+			<p class="t-label muted slide-hint">
+				{review.progress.complete
+					? "Slide to send · this is irreversible"
+					: `Add ${review.progress.required - review.progress.collected} more signature(s) to send.`}
+			</p>
 			<input
 				class="slider"
 				type="range"
@@ -244,7 +260,7 @@
 				max="100"
 				bind:value={slide}
 				onchange={confirmSend}
-				disabled={sendBusy}
+				disabled={sendBusy || !review.progress.complete}
 				aria-label="Slide to send"
 			/>
 			<div class="review-actions">

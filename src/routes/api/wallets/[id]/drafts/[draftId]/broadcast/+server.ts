@@ -23,6 +23,11 @@ export async function POST(event: RequestEvent) {
 	} catch {
 		// no body is fine -- the draft may already carry enough signatures
 	}
+	// Belt-and-braces length gate (SIGNING.md §3.3 -- "all PSBT byte paths"),
+	// same cap as /sign for a ride-along final signature.
+	if (typeof body.psbt === 'string' && body.psbt.length > 700_000) {
+		throw error(400, 'That signed transaction is unexpectedly large -- check you uploaded the right file.');
+	}
 	const node = getNodeClient();
 	try {
 		const result = await broadcastDraft(node, user.id, walletId, draftId, body.psbt);
