@@ -1,0 +1,2 @@
+id: "ingle" # Alex's personal community-store prefix. Alphabets + dashes only, no digits (Umbrel's own rule) -- this is why it's not "alexm223".
+name: "Ingle" # Shows up in the umbrelOS UI as "Ingle App Store".

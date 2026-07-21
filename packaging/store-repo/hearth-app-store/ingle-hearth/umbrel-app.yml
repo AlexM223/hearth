@@ -1,0 +1,90 @@
+manifestVersion: 1
+id: ingle-hearth
+# Community-store convention differs from the official store here: `icon:`
+# is expected as a real hosted URL (the official-store skill's "omit icon"
+# rule is specific to getumbrel/umbrel-apps, which hosts icons separately --
+# confirmed against getumbrel/umbrel-community-app-store's own template app,
+# which sets `icon:` to a real image URL). Not yet real: no icon asset has
+# been designed. Placeholder points at where it will live once this repo is
+# pushed and a real 256x256 icon (matching the umbrel-apps-gallery icon.svg
+# convention: square, 256x256) is committed alongside this file.
+icon: https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/icon.svg
+category: bitcoin
+name: Hearth
+version: "0.1.0"
+tagline: Come navigate Bitcoin with me
+description: >-
+  Hearth is the always-watching Bitcoin wallet for the people you trust: you
+  run the node -- the strong, warm core -- and you invite family and friends
+  to come navigate Bitcoin with you. One verified chain, one mempool, one
+  shared view; every member keeps their own keys; the watchtower tells each
+  of them the moment their money moves.
+
+
+  What's aboard: one unified wallet engine for watch-only, single-sig, and
+  multisig spends -- build, review, and broadcast a PSBT through a single
+  code path, signing with whatever external signer you already trust; invite
+  by link so a guest sets their own password and lands on a captain-branded
+  welcome, never a shared secret; a pool-aware block explorer built entirely
+  from your own node; an off-by-default solo Stratum mining pool with a
+  first-party dashboard (hashrate, best-share trophy, per-worker table); and
+  the watchtower -- fail-closed, SPV-verified push notifications over email,
+  Telegram, ntfy, Nostr, or webhook the moment money moves, never on a price
+  tick.
+
+
+  A couple of ports beyond the usual Umbrel app page are worth knowing about
+  before you install. Hearth also publishes a self-signed HTTPS listener on
+  port 4489, reserved for browser features that need a secure context
+  (in-browser hardware-wallet signing is planned but not yet built --
+  today's signing flow is PSBT-based, outside the browser); your browser
+  will ask you to accept its certificate the first time you open it, and
+  it's safe to ignore until that feature ships. If you turn on the solo
+  mining pool (off by default), your miner (e.g. a Bitaxe) connects to this
+  box on port 3343 (standard difficulty) or 3345 (ASIC-floor difficulty);
+  nothing listens on either port until mining is enabled.
+
+
+  Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
+releaseNotes: >-
+  0.1.0 -- first public release. The full M0-M6 build: the Ingle design
+  system (dark default, warm-parchment light); the node:sqlite-backed
+  module-bounded server; the one unified wallet engine (watch-only,
+  single-sig, 2-of-3+ multisig, PSBT build/review/broadcast through a single
+  code path); invite-by-link members with Owner/Member/Guest roles and a
+  captain-branded come-aboard flow; a pool-aware own-node block explorer; an
+  off-by-default solo Stratum V1 mining pool with a first-party dashboard;
+  and the five-channel fail-closed watchtower notifier. See DECISIONS.md for
+  the full build order and the M7 store-readiness checklist.
+developer: Alex Martinez
+website: https://github.com/AlexM223/hearth
+dependencies:
+  - bitcoin
+  - electrs
+repo: https://github.com/AlexM223/hearth
+support: https://github.com/AlexM223/hearth/issues
+port: 3252
+# Community-store convention: gallery entries are full hosted image URLs,
+# not bare filenames resolved from a separate assets repo (confirmed against
+# getumbrel/umbrel-community-app-store's template, which uses full imgur
+# URLs). Not yet real, same as `icon:` above -- these point at where the
+# five screenshots (packaging/umbrel/hearth/GALLERY.md's shot list) will
+# live once captured and committed to this repo.
+gallery:
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/1.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/2.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/3.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/4.jpg
+  - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/5.jpg
+path: ""
+defaultUsername: "admin@hearth.local"
+deterministicPassword: true
+backupIgnore:
+  - data/logs
+  - data/tls
+  - data/secret.key
+submitter: Alex Martinez
+# This app ships through Alex's own community store (this repo,
+# AlexM223/hearth-app-store), added to umbrelOS via its GitHub URL --
+# there is no getumbrel/umbrel-apps PR to reference.
+submission: ""
