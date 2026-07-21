@@ -8,7 +8,14 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import { loadConfig } from '$lib/server/config/index.js';
 import { openDb, runMigrations } from '$lib/server/db/index.js';
-import { bootstrapAdminFromEnv, getSessionUser, SESSION_COOKIE } from '$lib/server/auth/index.js';
+import {
+	bootstrapAdminFromEnv,
+	getSessionUser,
+	SESSION_COOKIE,
+	resolveApiPolicy,
+	roleAtLeast,
+	touchLastActive
+} from '$lib/server/auth/index.js';
 import { initNodeClient } from '$lib/server/node/index.js';
 import { startBlockWatcher } from '$lib/server/node/watcher.js';
 import { log } from '$lib/server/log.js';
@@ -24,16 +31,24 @@ startBlockWatcher(nodeClient);
 log('boot', { phase: 'ready', platform: config.platform, dbPath: config.dbPath });
 
 /**
- * Routes reachable with no session (DECISIONS.md §4.3's "login/invite-
- * landing require no session" carve-out; invite-landing itself arrives in
- * M3). `/api/health` stays dependency-free per M0.
+ * Page routes reachable with no session (DECISIONS.md §4.3's "login/invite-
+ * landing require no session" carve-out). `/api/health` is handled
+ * separately below (it stays dependency-free per M0, and isn't a page).
+ * `/join/**` is the captain-identified landing (COME-ABOARD.md §2, §6.3) --
+ * public by design, rendered outside the (app) shell.
  */
 function isPublicPath(pathname: string): boolean {
-	return pathname === '/login' || pathname === '/api/health';
+	return pathname === '/login' || pathname.startsWith('/join/');
 }
 
 function isAsset(pathname: string): boolean {
 	return pathname.startsWith('/_app/') || pathname === '/favicon.svg';
+}
+
+/** `/settings/**` is Owner-only (COME-ABOARD.md §3.2, §6.3) -- a Member/Guest
+ *  hitting it is redirected to their own `/me`, never shown a 403 shell. */
+function requiresOwnerPage(pathname: string): boolean {
+	return pathname === '/settings' || pathname.startsWith('/settings/');
 }
 
 // Replace server.mjs's boot-phase fallback now that the real logger-worthy
@@ -65,6 +80,13 @@ process.on('unhandledRejection', (reason) => {
 	);
 });
 
+function jsonError(status: number, error: string): Response {
+	return new Response(JSON.stringify({ error }), {
+		status,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
@@ -75,16 +97,28 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (pathname === '/api/health') return resolve(event);
 
+	// ---- Layer 1, deny-by-default (COME-ABOARD.md §3.3): every /api/** path
+	// resolves against the policy table BEFORE resolve(event) runs. No match
+	// => 403. A match whose role minimum isn't met => 401 (no session) or 403
+	// (insufficient role). This is Layer 1 of the two-layer gate; every
+	// handler ALSO re-checks (Layer 2, auth/guard.ts's requireRole/
+	// requireWalletAccess) so a route stays safe even if a policy line is
+	// ever dropped by a future refactor.
+	if (pathname.startsWith('/api/')) {
+		const rule = resolveApiPolicy(pathname, event.request.method);
+		if (!rule) return jsonError(403, 'forbidden');
+		if (!roleAtLeast(user, rule.min)) {
+			return jsonError(user ? 403 : 401, user ? 'forbidden' : 'unauthorized');
+		}
+		if (user) touchLastActive(user.id);
+		return resolve(event);
+	}
+
 	if (!user) {
 		if (isPublicPath(pathname)) return resolve(event);
-		if (pathname.startsWith('/api/')) {
-			return new Response(JSON.stringify({ error: 'unauthorized' }), {
-				status: 401,
-				headers: { 'content-type': 'application/json' }
-			});
-		}
 		throw redirect(303, '/login');
 	}
+	touchLastActive(user.id);
 
 	// Authenticated from here on.
 	if (pathname === '/login') throw redirect(303, '/');
@@ -94,6 +128,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 	if (!user.mustResetPassword && pathname === '/login/reset') {
 		throw redirect(303, '/');
+	}
+
+	if (requiresOwnerPage(pathname) && !roleAtLeast(user, 'owner')) {
+		throw redirect(303, '/me');
 	}
 
 	return resolve(event);

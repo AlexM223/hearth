@@ -46,3 +46,4 @@ export {
 
 export { API_POLICY, resolveApiPolicy, type MinRole, type Rule } from './policy.js';
 export { roleAtLeast, requireRole, requireWalletAccess } from './guard.js';
+export { touchLastActive, resetActivityThrottle } from './activity.js';
