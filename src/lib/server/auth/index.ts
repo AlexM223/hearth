@@ -41,8 +41,18 @@ export {
 	setHouseholdName,
 	getHouseholdNameSetting,
 	hasBeenWelcomed,
-	markWelcomed
+	markWelcomed,
+	guestSeesHouseholdBalance,
+	setGuestSeesHouseholdBalance
 } from './household.js';
+
+export {
+	updateOwnProfile,
+	getOwnPrefs,
+	setOwnTheme,
+	type UpdateProfileInput,
+	type OwnPrefs
+} from './self.js';
 
 export { API_POLICY, resolveApiPolicy, type MinRole, type Rule } from './policy.js';
 export { roleAtLeast, requireRole, requireWalletAccess } from './guard.js';

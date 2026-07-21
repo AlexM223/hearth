@@ -7,6 +7,7 @@ import {
 	hasBeenWelcomed,
 	markWelcomed,
 	householdSummary,
+	guestSeesHouseholdBalance,
 	type WalletBalanceReader
 } from '$lib/server/auth/index.js';
 import { heroKindFor } from './home-choreography.js';
@@ -58,7 +59,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// read-only, computed fresh on every load (same SWR-synchronous pattern
 		// as the wallets list; refreshed live by the existing 'block' broadcast
 		// tick rather than a dedicated push, see T10's close-out note).
-		household: user.role === 'owner' ? householdSummary(readBalances) : null
+		household: user.role === 'owner' ? householdSummary(readBalances) : null,
+		// Guest household-balance opt-in (§3.6, default OFF): aggregate ONLY,
+		// never a member breakdown -- same householdSummary reader, just a
+		// narrower projection for a Guest than the Owner's panel gets.
+		guestHouseholdBalance:
+			user.role === 'guest' && guestSeesHouseholdBalance()
+				? { confirmedSats: householdSummary(readBalances).confirmedSats }
+				: null
 	};
 };
 

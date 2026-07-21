@@ -34,6 +34,21 @@ export function getHouseholdNameSetting(): string | null {
 	return getMeta(HOUSEHOLD_NAME_KEY);
 }
 
+// ------------------------------------------- guest household-balance opt-in
+
+const GUEST_SEES_BALANCE_KEY = 'guest.seeHouseholdBalance';
+
+/** Default OFF (COME-ABOARD §3.6): a Guest seeing the household's total
+ *  holdings is a materially stronger grant than "dashboard stats" -- least
+ *  privilege means the Owner opts IN, deliberately. */
+export function guestSeesHouseholdBalance(): boolean {
+	return getMeta(GUEST_SEES_BALANCE_KEY) === '1';
+}
+
+export function setGuestSeesHouseholdBalance(enabled: boolean): void {
+	setMeta(GUEST_SEES_BALANCE_KEY, enabled ? '1' : '0');
+}
+
 // ------------------------------------------------------ welcome ribbon flag
 
 function welcomedKey(userId: number): string {

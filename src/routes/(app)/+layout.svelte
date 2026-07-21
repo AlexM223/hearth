@@ -36,6 +36,8 @@
 				<a href="/settings" class:active={isActive('/settings')} class="settings-link" title="Settings"
 					>Settings</a
 				>
+			{:else if data.user}
+				<a href="/me" class:active={isActive('/me')} class="settings-link" title="My profile">My profile</a>
 			{/if}
 			{#if data.user}
 				<span class="username t-label">{data.user.username}</span>

@@ -88,6 +88,16 @@
 	</section>
 {/if}
 
+{#if data.guestHouseholdBalance}
+	<section class="panel household hairline">
+		<p class="t-micro">Household balance</p>
+		<p class="t-title household-total">
+			{formatSats(data.guestHouseholdBalance.confirmedSats)} <span class="unit">sats</span>
+		</p>
+		<p class="t-label muted">Shared with you by your host, read-only</p>
+	</section>
+{/if}
+
 <section class="hero panel">
 	<p class="t-micro">The hearth</p>
 	{#if data.heroKind === 'aboard'}
