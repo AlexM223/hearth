@@ -188,6 +188,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{data.wallet.name} -- Hearth</title>
+</svelte:head>
+
 <section class="hero panel">
 	<a class="back t-label" href="/wallets">← Wallets</a>
 	<p class="t-micro">{data.wallet.name}</p>

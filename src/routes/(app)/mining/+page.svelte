@@ -78,6 +78,10 @@
 	);
 </script>
 
+<svelte:head>
+	<title>Mining -- Hearth</title>
+</svelte:head>
+
 <section class="panel status hairline">
 	<p class="t-micro">Mining</p>
 	<h1 class="t-title">{engineStatusText((data.mine ?? data.pool)?.engine.status)}</h1>

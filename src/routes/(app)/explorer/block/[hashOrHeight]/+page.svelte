@@ -64,6 +64,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Block {formatSats(data.detail.height)} -- Hearth</title>
+</svelte:head>
+
 <section class="panel">
 	<a class="back t-label" href="/explorer">← Explorer</a>
 

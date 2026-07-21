@@ -45,6 +45,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Address {data.address.slice(0, 10)}… -- Hearth</title>
+</svelte:head>
+
 <section class="panel">
 	<a class="back t-label" href="/explorer">← Explorer</a>
 

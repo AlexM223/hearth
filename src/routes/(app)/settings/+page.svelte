@@ -4,6 +4,10 @@
 	// display/notifications remain M4/M6 shells.
 </script>
 
+<svelte:head>
+	<title>Settings -- Hearth</title>
+</svelte:head>
+
 <section class="panel">
 	<p class="t-micro">Settings</p>
 	<h1 class="t-title">Chain backend, display &amp; members</h1>
@@ -21,8 +25,8 @@
 <section class="panel entry">
 	<p class="t-micro">Notifications</p>
 	<p class="t-label">
-		Set the shared SMTP relay, the instance's Telegram bot, and ntfy/Nostr/webhook defaults every
-		member's own channel rides on.
+		Set the shared SMTP relay, the instance's Telegram bot, and the ntfy/Nostr/webhook defaults
+		that every member's own channel rides on.
 	</p>
 	<a class="btn-primary" href="/settings/notifications">Manage notification settings</a>
 </section>

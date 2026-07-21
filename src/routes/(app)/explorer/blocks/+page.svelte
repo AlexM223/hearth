@@ -7,6 +7,10 @@
 	let { data }: PageProps = $props();
 </script>
 
+<svelte:head>
+	<title>Blocks -- Hearth</title>
+</svelte:head>
+
 <section class="panel">
 	<div class="head">
 		<a class="back t-label" href="/explorer">← Explorer</a>

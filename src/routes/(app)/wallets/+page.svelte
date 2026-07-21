@@ -53,6 +53,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Wallets -- Hearth</title>
+</svelte:head>
+
 <section class="head">
 	<div>
 		<p class="t-micro">Wallets</p>

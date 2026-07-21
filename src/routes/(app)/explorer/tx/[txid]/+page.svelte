@@ -49,6 +49,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Transaction -- Hearth</title>
+</svelte:head>
+
 <section class="panel">
 	<a class="back t-label" href="/explorer">← Explorer</a>
 

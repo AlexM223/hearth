@@ -82,8 +82,9 @@
 			{formatSats(data.household.confirmedSats)} <span class="unit">sats</span>
 		</p>
 		<p class="t-label muted">
-			{data.household.memberCount}
-			{data.household.memberCount === 1 ? 'member' : 'members'} · read-only, never a member's draft
+			{data.household.memberCount === 0
+				? 'Just you so far'
+				: `${data.household.memberCount} invited aboard`} · read-only, never a member's draft
 		</p>
 	</section>
 {/if}
@@ -119,8 +120,14 @@
 		</div>
 	{:else if data.user?.role !== 'guest'}
 		<div class="actions">
-			<a class="btn-primary" href="/wallets">Send</a>
-			<a class="btn-primary secondary" href="/wallets">Receive</a>
+			{#if data.walletCount === 0}
+				<!-- No wallet yet: Send/Receive would be dead ends -- point at the
+				     actual next step instead. -->
+				<a class="btn-primary" href="/wallets">Import a wallet</a>
+			{:else}
+				<a class="btn-primary" href="/wallets">Send</a>
+				<a class="btn-primary secondary" href="/wallets">Receive</a>
+			{/if}
 		</div>
 	{/if}
 </section>

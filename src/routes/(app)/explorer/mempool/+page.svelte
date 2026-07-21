@@ -10,6 +10,10 @@
 	let maxVsize = $derived(Math.max(1, ...data.histogram.buckets.map((b) => b.vsize)));
 </script>
 
+<svelte:head>
+	<title>Mempool -- Hearth</title>
+</svelte:head>
+
 <section class="panel">
 	<a class="back t-label" href="/explorer">← Explorer</a>
 	<p class="t-title">Mempool (Advanced)</p>

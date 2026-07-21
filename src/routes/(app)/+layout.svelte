@@ -93,7 +93,7 @@
 			<input
 				class="search-input t-mono"
 				type="search"
-				placeholder="Search a block, transaction, or address"
+				placeholder="Search blocks, txs, addresses"
 				bind:value={searchQuery}
 				aria-label="Search a block, transaction, or address"
 			/>
@@ -213,7 +213,9 @@
 		border: none;
 		color: var(--text);
 		font-size: var(--t-label);
-		width: 220px;
+		/* Wide enough that the full placeholder renders unclipped in the
+		   mono UI font -- 220px cut it off mid-word. */
+		width: 264px;
 		outline: none;
 	}
 

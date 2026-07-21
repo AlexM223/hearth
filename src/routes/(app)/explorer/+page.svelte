@@ -87,6 +87,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Explorer -- Hearth</title>
+</svelte:head>
+
 <section class="panel fee-headline">
 	<p class="t-micro">Fee to send</p>
 	{#if data.fees}
@@ -115,7 +119,10 @@
 
 <section class="panel flow">
 	<p class="t-micro">Mempool → confirmed</p>
-	<svg viewBox="0 0 900 200" role="img" aria-label="Mempool to confirmed-block flow, fee-rate colored">
+	<!-- 224 tall, squares baselined at 196: a full lane (40 squares x 4px)
+	     tops out at y=40, safely below the lane label (y=18) and the
+	     "+N vB more" overflow label (y=28) instead of colliding with them. -->
+	<svg viewBox="0 0 900 224" role="img" aria-label="Mempool to confirmed-block flow, fee-rate colored">
 		<!-- mempool zone: 5 fee-band lanes, economy leftmost, priority closest to the divider -->
 		{#each bands as band, i (band.tier)}
 			{@const laneX = 20 + i * 100}
@@ -125,7 +132,7 @@
 			{#each Array.from({ length: band.squares }) as _, s (s)}
 				<rect
 					x={laneX + 40 - squareSize / 2}
-					y={172 - s * (squareSize + gap)}
+					y={196 - s * (squareSize + gap)}
 					width={squareSize}
 					height={squareSize}
 					fill={`var(--fee-${band.tier})`}
@@ -138,13 +145,13 @@
 			{/if}
 		{/each}
 		{#if mempoolRichness === 'none'}
-			<text x="270" y="100" class="empty-label" text-anchor="middle">Mempool view needs Core RPC</text>
+			<text x="270" y="112" class="empty-label" text-anchor="middle">Mempool view needs Core RPC</text>
 		{/if}
 
 		<!-- divider -->
-		<line x1={dividerX} y1="10" x2={dividerX} y2="180" class="divider" />
-		<text x={dividerX - 30} y="195" class="zone-label" text-anchor="middle">mempool</text>
-		<text x={dividerX + 30} y="195" class="zone-label" text-anchor="middle">confirmed</text>
+		<line x1={dividerX} y1="10" x2={dividerX} y2="204" class="divider" />
+		<text x={dividerX - 30} y="219" class="zone-label" text-anchor="middle">mempool</text>
+		<text x={dividerX + 30} y="219" class="zone-label" text-anchor="middle">confirmed</text>
 
 		<!-- confirmed blocks: newest immediately right of the divider -->
 		{#each blocks as block, i (block.hash)}
@@ -152,7 +159,7 @@
 			<a href={`/explorer/block/${block.hash}`}>
 				<rect
 					x={x}
-					y="60"
+					y="72"
 					width="64"
 					height="64"
 					rx="8"
@@ -160,7 +167,7 @@
 					class:pool-found={block.pool !== null}
 					style:opacity={1 - i * 0.12}
 				/>
-				<text x={x + 32} y="96" class="block-height" text-anchor="middle">{block.height}</text>
+				<text x={x + 32} y="108" class="block-height" text-anchor="middle">{block.height}</text>
 			</a>
 		{/each}
 	</svg>

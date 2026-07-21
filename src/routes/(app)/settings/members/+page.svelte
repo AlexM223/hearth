@@ -38,8 +38,9 @@
 	<p class="t-micro">Settings</p>
 	<h1 class="t-title">Members &amp; invites</h1>
 	<p class="t-label muted">
-		{data.household.memberCount}
-		{data.household.memberCount === 1 ? 'member' : 'members'} · household total {formatSats(
+		{data.household.memberCount === 0
+			? 'Just you so far'
+			: `${data.household.memberCount} invited aboard`} · household total {formatSats(
 			data.household.confirmedSats
 		)} sats
 	</p>
