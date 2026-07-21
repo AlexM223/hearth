@@ -139,14 +139,29 @@ async function main() {
 	console.log('[smoke] container still running after boot -- OK');
 
 	// --- /api/health ---
+	// server.mjs binds its listeners immediately with a 503 "still booting"
+	// placeholder and swaps in the real handler once the SvelteKit bundle
+	// (DB open + migrations) finishes importing -- so a 503 here means "not
+	// ready yet", not "broken". Poll until 200 or a hard deadline; a cold CI
+	// runner can legitimately take longer than any flat sleep.
+	const healthDeadline = Date.now() + 60_000;
 	let health;
-	try {
-		const res = await fetch(`http://127.0.0.1:${port}/api/health`);
-		health = res.status;
-	} catch (e) {
-		fail(`GET /api/health threw: ${e}`);
+	for (;;) {
+		try {
+			const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+			health = res.status;
+		} catch (e) {
+			fail(`GET /api/health threw: ${e}`);
+		}
+		if (health === 200) break;
+		if (health !== 503) fail(`GET /api/health returned ${health}, expected 200`);
+		if (Date.now() >= healthDeadline) {
+			fail('GET /api/health still 503 (booting) after 60s -- boot never completed');
+		}
+		const still = run('docker', ['inspect', '-f', '{{.State.Running}}', containerName]);
+		if (still.stdout.trim() !== 'true') fail('container exited while waiting for /api/health');
+		await sleep(2000);
 	}
-	if (health !== 200) fail(`GET /api/health returned ${health}, expected 200`);
 	console.log('[smoke] GET /api/health -> 200 -- OK');
 
 	// --- / (themed shell) ---
