@@ -63,3 +63,5 @@ export {
 	type CreateInviteInput,
 	type CreatedInvite
 } from './invites.js';
+
+export { acceptInvite, AcceptInviteError, type AcceptInviteInput, type AcceptedMember } from './accept.js';
