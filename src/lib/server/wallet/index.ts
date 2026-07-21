@@ -123,6 +123,13 @@ export {
 	type ImportInput
 } from './import.js';
 export {
+	addDescriptorChecksum,
+	computeDescriptorChecksum,
+	verifyDescriptorChecksum,
+	splitDescriptorChecksum,
+	hasChecksumSuffix
+} from './descsum.js';
+export {
 	listAllWalletRows,
 	getWalletRowUnscoped,
 	highestUsedIndex,

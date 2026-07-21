@@ -18,6 +18,7 @@ import {
 	parseDescriptor
 } from './index.js';
 import { PrivateKeyRejectedError } from './derive.js';
+import { addDescriptorChecksum, computeDescriptorChecksum, verifyDescriptorChecksum } from './descsum.js';
 
 const ZPUB =
 	'zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs';
@@ -157,5 +158,56 @@ describe('T3: import safety + descriptor round-trip', () => {
 	it('scopes wallets to their owner (a foreign user cannot fetch)', () => {
 		const w = importWallet(userId, { name: 'Mine', xpub: ZPUB });
 		expect(getWallet(userId + 999, w.id)).toBeNull();
+	});
+});
+
+describe('T3: BIP-380 descriptor checksum (hearth-624.12)', () => {
+	it('walletToDescriptor emits a valid, Core-identical checksum', () => {
+		const w = importWallet(userId, { name: 'Checksummed', xpub: ZPUB });
+		const desc = walletToDescriptor(w, 0);
+		expect(desc).toMatch(/#[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{8}$/);
+		expect(verifyDescriptorChecksum(desc)).toBe(true);
+	});
+
+	it('the descriptor persisted at import time also carries a valid checksum', () => {
+		const w = importWallet(userId, { name: 'StoredChecksum', xpub: ZPUB });
+		expect(w.descriptor).not.toBeNull();
+		expect(verifyDescriptorChecksum(w.descriptor as string)).toBe(true);
+	});
+
+	it('accepts an imported descriptor with a correct checksum', () => {
+		const { xpub, fp } = accountXpub(21, "m/84'/0'/0'");
+		const body = `wpkh([${fp}/84'/0'/0']${xpub}/0/*)`;
+		const desc = addDescriptorChecksum(body);
+		const w = importWallet(userId, { name: 'GoodChecksum', descriptor: desc });
+		expect(w.keys[0].xpub).toBe(xpub);
+	});
+
+	it('rejects an imported descriptor with a wrong checksum, naming the correct one', () => {
+		const { xpub, fp } = accountXpub(22, "m/84'/0'/0'");
+		const body = `wpkh([${fp}/84'/0'/0']${xpub}/0/*)`;
+		const correct = computeDescriptorChecksum(body);
+		// Flip the checksum's first character to guarantee a mismatch.
+		const wrongChar = correct[0] === 'q' ? 'p' : 'q';
+		const wrongChecksum = wrongChar + correct.slice(1);
+		const desc = `${body}#${wrongChecksum}`;
+
+		let thrown: unknown;
+		try {
+			importWallet(userId, { name: 'BadChecksum', descriptor: desc });
+		} catch (e) {
+			thrown = e;
+		}
+		expect(thrown).toBeInstanceOf(Error);
+		const message = (thrown as Error).message;
+		expect(message).toContain(wrongChecksum);
+		expect(message).toContain(correct);
+	});
+
+	it('still accepts a checksum-less descriptor (Core/Sparrow compat)', () => {
+		const { xpub, fp } = accountXpub(23, "m/84'/0'/0'");
+		const body = `wpkh([${fp}/84'/0'/0']${xpub}/0/*)`; // no #checksum
+		const w = importWallet(userId, { name: 'NoChecksum', descriptor: body });
+		expect(w.keys[0].xpub).toBe(xpub);
 	});
 });

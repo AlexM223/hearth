@@ -4,10 +4,14 @@
  * from the input, then stored as data; the caller never picks a code path.
  * Private extended keys are rejected FIRST (parseXpub) and never echoed.
  *
- * Descriptor checksum: a provided `#checksum` is stripped and the descriptor is
- * re-validated STRUCTURALLY (xpub base58check, key-origin depth cross-check).
- * The checksum is typo-detection, not a security boundary; Core-identical
- * emission is a follow-up (hearth-624.12). walletToDescriptor emits checksumless.
+ * Descriptor checksum (hearth-624.12, Core-identical BIP-380): a descriptor
+ * WITHOUT a `#checksum` is accepted as-is (Core/Sparrow compat; the checksum
+ * is typo-detection, not a security boundary) and is separately re-validated
+ * STRUCTURALLY (xpub base58check, key-origin depth cross-check). A descriptor
+ * WITH a `#checksum` has that checksum VALIDATED against the exact BIP-380
+ * algorithm; a mismatch is rejected with a warm error naming the checksum the
+ * payload actually hashes to (typo help). Every descriptor Hearth emits
+ * (buildDescriptor / walletToDescriptor) carries a freshly computed checksum.
  */
 import { HDKey } from '@scure/bip32';
 import type {
@@ -27,6 +31,7 @@ import {
 	type NewWallet
 } from './repo.js';
 import { parseHdPath } from './script/engine.js';
+import { addDescriptorChecksum, computeDescriptorChecksum, splitDescriptorChecksum } from './descsum.js';
 
 class ImportError extends WalletError {
 	constructor(message: string) {
@@ -51,10 +56,29 @@ interface ParsedDescriptor {
 
 // --------------------------------------------------------- descriptor parsing
 
-/** Strip a trailing `#checksum` (validated structurally, not by re-derivation). */
+/** Strip a trailing `#checksum`, VALIDATING it (BIP-380, Core-identical) when
+ *  present. A checksum-less descriptor is accepted unchanged (Core/Sparrow
+ *  compat -- see module doc comment). A present-but-wrong checksum throws a
+ *  warm, plain-language error naming the checksum the payload actually
+ *  produces, so a typo is easy to fix. */
 function stripChecksum(desc: string): string {
-	const hash = desc.lastIndexOf('#');
-	return hash >= 0 ? desc.slice(0, hash) : desc;
+	const { payload, checksum } = splitDescriptorChecksum(desc);
+	if (checksum === null) return payload;
+	let expected: string;
+	try {
+		expected = computeDescriptorChecksum(payload);
+	} catch {
+		// Payload has a character outside the BIP-380 charset -- let downstream
+		// parsing produce its own (more specific) error.
+		return payload;
+	}
+	if (checksum !== expected) {
+		throw new ImportError(
+			`descriptor checksum "#${checksum}" doesn't match -- did you mean "#${expected}"? ` +
+				`(check for a typo in the descriptor, or drop the checksum entirely)`
+		);
+	}
+	return payload;
 }
 
 /** Parse one KEY expression: `[fp/origin]xpub[/suffix]`. Cross-checks the xpub's
@@ -337,8 +361,8 @@ function keyExprFromParts(xpub: string, fingerprint?: string, path?: string): st
 
 // -------------------------------------------------------- descriptor emission
 
-/** Emit a BIP-380 output descriptor for a wallet on a chain (0/1). Checksumless
- *  in M2 (hearth-624.12) -- Core/Sparrow accept and recompute their own. */
+/** Emit a BIP-380 output descriptor for a wallet on a chain (0/1), with a
+ *  Core-identical `#checksum` (hearth-624.12). */
 export function walletToDescriptor(wallet: Wallet, chain: 0 | 1 = 0): string {
 	const parsed: ParsedDescriptor = {
 		kind: wallet.kind,
@@ -356,6 +380,10 @@ function keyToExpr(k: ParsedKey, chain: 0 | 1): string {
 }
 
 function buildDescriptor(parsed: ParsedDescriptor, chain: 0 | 1): string {
+	return addDescriptorChecksum(buildDescriptorBody(parsed, chain));
+}
+
+function buildDescriptorBody(parsed: ParsedDescriptor, chain: 0 | 1): string {
 	if (parsed.kind === 'single') {
 		const key = keyToExpr(parsed.keys[0], chain);
 		switch (parsed.scriptType) {
