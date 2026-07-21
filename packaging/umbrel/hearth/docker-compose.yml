@@ -9,8 +9,8 @@ services:
   web:
     # Pinned to the multi-arch (linux/amd64 + linux/arm64) manifest-list
     # digest pushed by .github/workflows/release.yml. Verify with:
-    #   docker buildx imagetools inspect ghcr.io/alexm223/hearth:0.1.1
-    image: ghcr.io/alexm223/hearth:0.1.1@sha256:59d77ebbf0ff850b2922487befe3d91cb6d72de9904ea3f0eab1aa50bfbb5dc7
+    #   docker buildx imagetools inspect ghcr.io/alexm223/hearth:0.1.2
+    image: ghcr.io/alexm223/hearth:0.1.2@sha256:bcc89e95ec71de1dd1be1779eec86ab00e99ae867b2cd2b2fbda497c4bbfb806
     restart: on-failure
     stop_grace_period: 1m
     init: true
