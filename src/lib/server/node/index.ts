@@ -7,7 +7,7 @@
  * independently via allSettled).
  */
 import { ElectrumPool } from './electrum/pool.js';
-import { CoreRpcClient, getBlockchainInfo, getMempoolInfo, getNetworkInfo } from './core/rpc.js';
+import { CoreRpcClient, getBlockchainInfo, getBlockCount, getMempoolInfo, getNetworkInfo } from './core/rpc.js';
 import { addressToScriptHash } from './electrum/scripthash.js';
 import type { ElectrumBalance, ElectrumHeader } from './electrum/client.js';
 import type { CoreRpcConfig, ElectrumConfig } from '../config/index.js';
@@ -100,6 +100,26 @@ export class NodeClient {
 		} catch {
 			const hexStr = await this.core.call<string>('getrawtransaction', [txid]);
 			return Uint8Array.from(Buffer.from(hexStr, 'hex'));
+		}
+	}
+
+	/**
+	 * Cheap current tip height (chain/ module's confirmations math, EXPLORER.md
+	 * §1.4/§1.5): Electrum's live-subscribed cache is free; Core
+	 * `getblockcount` is the fallback. `null` only when BOTH rails are down.
+	 */
+	async getTipHeight(): Promise<number | null> {
+		if (this.lastElectrumTip) return this.lastElectrumTip.height;
+		try {
+			const header = await this.electrumPool.headersSubscribe();
+			this.lastElectrumTip = header;
+			return header.height;
+		} catch {
+			try {
+				return await getBlockCount(this.core);
+			} catch {
+				return null;
+			}
 		}
 	}
 

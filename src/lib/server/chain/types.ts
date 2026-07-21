@@ -29,6 +29,18 @@ export interface BlockSummary {
 	pool: PoolAttribution | null; // "you found this" -- never a third-party pool guess
 }
 
+/**
+ * Deviation from EXPLORER.md §1.2 (documented per this doc's own license to
+ * fix-forward genuine spec defects, header note): the spec's literal text
+ * types `difficulty`/`chainwork`/`confirmations` as always-present, but its
+ * OWN §1.3 degrade table has a real Electrum-only "basic" path for a
+ * block-by-height lookup with Core down (bare header only -- no
+ * confirmations/difficulty/chainwork available from a raw header alone
+ * without knowing the rest of the chain). Non-nullable fields would force
+ * either a fabricated value (banned, §1.2's cardinal rule) or silently
+ * dropping the 'basic' tier this doc itself specifies. Nullable here keeps
+ * the cardinal rule airtight.
+ */
 export interface BlockDetail extends BlockSummary {
 	prevHash: string | null;
 	nextHash: string | null;
@@ -37,9 +49,9 @@ export interface BlockDetail extends BlockSummary {
 	bits: string;
 	version: number;
 	versionHex: string;
-	difficulty: number;
-	chainwork: string;
-	confirmations: number;
+	difficulty: number | null;
+	chainwork: string | null;
+	confirmations: number | null;
 }
 
 export interface BlockTxRow {

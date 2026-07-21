@@ -60,6 +60,12 @@ export interface ElectrumHeader {
 	hex: string;
 }
 
+export interface ElectrumBlockHeaders {
+	hex: string; // `count` concatenated 80-byte headers
+	count: number;
+	max: number;
+}
+
 export type ElectrumFeeHistogram = [number, number][];
 
 interface PendingRequest {
@@ -463,6 +469,16 @@ export class ElectrumClient extends EventEmitter {
 
 	async getBlockHeader(height: number): Promise<string> {
 		return (await this.request('blockchain.block.header', [height])) as string;
+	}
+
+	/** A RANGE of raw headers in one call (`blockchain.block.headers`) -- the
+	 *  cheap "recent blocks" source for the explorer index (EXPLORER.md §1.4):
+	 *  `hex` is `count` concatenated 80-byte headers starting at `startHeight`. */
+	async getBlockHeaders(startHeight: number, count: number): Promise<ElectrumBlockHeaders> {
+		return (await this.request('blockchain.block.headers', [
+			startHeight,
+			count
+		])) as ElectrumBlockHeaders;
 	}
 
 	/** BTC/kvB (Electrum convention), or -1 when the server has no estimate. */

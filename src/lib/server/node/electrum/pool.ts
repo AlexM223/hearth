@@ -15,6 +15,7 @@ import { ElectrumClient } from './client.js';
 import type {
 	ElectrumClientOptions,
 	ElectrumBalance,
+	ElectrumBlockHeaders,
 	ElectrumFeeHistogram,
 	ElectrumHistoryItem,
 	ElectrumUnspent
@@ -128,6 +129,14 @@ export class ElectrumPool extends EventEmitter {
 
 	getBlockHeader(height: number, lane: ElectrumLane = 'interactive'): Promise<string> {
 		return this.pick(lane).getBlockHeader(height);
+	}
+
+	getBlockHeaders(
+		startHeight: number,
+		count: number,
+		lane: ElectrumLane = 'interactive'
+	): Promise<ElectrumBlockHeaders> {
+		return this.pick(lane).getBlockHeaders(startHeight, count);
 	}
 
 	estimateFee(targetBlocks: number): Promise<number> {

@@ -176,6 +176,18 @@ export class CoreRpcClient {
 
 // ── Typed thin wrappers (trimmed to what M1's health snapshot + explorer need) ──
 
+/**
+ * The minimal structural surface every thin wrapper below needs -- NOT the
+ * concrete `CoreRpcClient` class, so `chain/*.ts`'s narrow per-file node
+ * interfaces (the wallet module's `SyncNode`/`ScanRail` convention, EXPLORER.md
+ * §1.1) can satisfy this with a plain mock object in tests without
+ * constructing a real client. `CoreRpcClient` itself structurally satisfies
+ * this (a class instance always satisfies a narrower public-shape interface).
+ */
+export interface RpcCaller {
+	call<T>(method: string, params?: unknown[]): Promise<T>;
+}
+
 export interface BlockchainInfo {
 	chain: string;
 	blocks: number;
@@ -244,14 +256,14 @@ export interface ScanTxOutResult {
 	total_amount: number;
 }
 
-export const getBlockchainInfo = (rpc: CoreRpcClient) => rpc.call<BlockchainInfo>('getblockchaininfo');
-export const getNetworkInfo = (rpc: CoreRpcClient) => rpc.call<NetworkInfo>('getnetworkinfo');
-export const getMempoolInfo = (rpc: CoreRpcClient) => rpc.call<MempoolInfo>('getmempoolinfo');
-export const getBlockCount = (rpc: CoreRpcClient) => rpc.call<number>('getblockcount');
-export const getBestBlockHash = (rpc: CoreRpcClient) => rpc.call<string>('getbestblockhash');
-export const getBlockHash = (rpc: CoreRpcClient, height: number) =>
+export const getBlockchainInfo = (rpc: RpcCaller) => rpc.call<BlockchainInfo>('getblockchaininfo');
+export const getNetworkInfo = (rpc: RpcCaller) => rpc.call<NetworkInfo>('getnetworkinfo');
+export const getMempoolInfo = (rpc: RpcCaller) => rpc.call<MempoolInfo>('getmempoolinfo');
+export const getBlockCount = (rpc: RpcCaller) => rpc.call<number>('getblockcount');
+export const getBestBlockHash = (rpc: RpcCaller) => rpc.call<string>('getbestblockhash');
+export const getBlockHash = (rpc: RpcCaller, height: number) =>
 	rpc.call<string>('getblockhash', [height]);
-export const getBlockHeader = (rpc: CoreRpcClient, hash: string, verbose = true) =>
+export const getBlockHeader = (rpc: RpcCaller, hash: string, verbose = true) =>
 	rpc.call<BlockHeader>('getblockheader', [hash, verbose]);
 
 // ── Explorer rail wrappers (EXPLORER.md §1.3/§7 T0) ──────────────────────
@@ -315,25 +327,25 @@ export interface BlockVerbose2 extends BlockHeader {
 	tx: RawTransaction[];
 }
 
-export function getRawTransaction(rpc: CoreRpcClient, txid: string, verbose: false): Promise<string>;
+export function getRawTransaction(rpc: RpcCaller, txid: string, verbose: false): Promise<string>;
 export function getRawTransaction(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	verbose?: true
 ): Promise<RawTransaction>;
 export function getRawTransaction(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	verbose: boolean = true
 ): Promise<string | RawTransaction> {
 	return rpc.call('getrawtransaction', [txid, verbose]);
 }
 
-export function getBlock(rpc: CoreRpcClient, hash: string, verbosity: 0): Promise<string>;
-export function getBlock(rpc: CoreRpcClient, hash: string, verbosity?: 1): Promise<BlockVerbose1>;
-export function getBlock(rpc: CoreRpcClient, hash: string, verbosity: 2): Promise<BlockVerbose2>;
+export function getBlock(rpc: RpcCaller, hash: string, verbosity: 0): Promise<string>;
+export function getBlock(rpc: RpcCaller, hash: string, verbosity?: 1): Promise<BlockVerbose1>;
+export function getBlock(rpc: RpcCaller, hash: string, verbosity: 2): Promise<BlockVerbose2>;
 export function getBlock(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	hash: string,
 	verbosity: 0 | 1 | 2 = 1
 ): Promise<string | BlockVerbose1 | BlockVerbose2> {
@@ -358,7 +370,7 @@ export interface TxOutResult {
 	coinbase: boolean;
 }
 export function getTxOut(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	n: number,
 	includeMempool = true
@@ -389,40 +401,40 @@ export interface MempoolEntry {
 }
 /** Fails fast (rejects) when `txid` isn't in the mempool -- CPFP (§1.5.1)
  *  relies on this to skip ancestor/descendant calls for a confirmed tx. */
-export const getMempoolEntry = (rpc: CoreRpcClient, txid: string) =>
+export const getMempoolEntry = (rpc: RpcCaller, txid: string) =>
 	rpc.call<MempoolEntry>('getmempoolentry', [txid]);
 
-export function getRawMempool(rpc: CoreRpcClient, verbose: false): Promise<string[]>;
-export function getRawMempool(rpc: CoreRpcClient, verbose: true): Promise<Record<string, MempoolEntry>>;
+export function getRawMempool(rpc: RpcCaller, verbose: false): Promise<string[]>;
+export function getRawMempool(rpc: RpcCaller, verbose: true): Promise<Record<string, MempoolEntry>>;
 export function getRawMempool(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	verbose: boolean = false
 ): Promise<string[] | Record<string, MempoolEntry>> {
 	return rpc.call('getrawmempool', [verbose]);
 }
 
-export function getMempoolAncestors(rpc: CoreRpcClient, txid: string, verbose: false): Promise<string[]>;
+export function getMempoolAncestors(rpc: RpcCaller, txid: string, verbose: false): Promise<string[]>;
 export function getMempoolAncestors(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	verbose: true
 ): Promise<Record<string, MempoolEntry>>;
 export function getMempoolAncestors(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	verbose: boolean = false
 ): Promise<string[] | Record<string, MempoolEntry>> {
 	return rpc.call('getmempoolancestors', [txid, verbose]);
 }
 
-export function getMempoolDescendants(rpc: CoreRpcClient, txid: string, verbose: false): Promise<string[]>;
+export function getMempoolDescendants(rpc: RpcCaller, txid: string, verbose: false): Promise<string[]>;
 export function getMempoolDescendants(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	verbose: true
 ): Promise<Record<string, MempoolEntry>>;
 export function getMempoolDescendants(
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	txid: string,
 	verbose: boolean = false
 ): Promise<string[] | Record<string, MempoolEntry>> {
@@ -438,7 +450,7 @@ export interface SmartFeeEstimate {
 /** Core's estimator -- the Electrum-down fallback per target in the fee
  *  ladder (§1.3's fee-recommendation row). */
 export const estimateSmartFee = (
-	rpc: CoreRpcClient,
+	rpc: RpcCaller,
 	confTarget: number,
 	estimateMode: EstimateMode = 'CONSERVATIVE'
 ) => rpc.call<SmartFeeEstimate>('estimatesmartfee', [confTarget, estimateMode]);

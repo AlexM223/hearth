@@ -9,6 +9,7 @@
  */
 import { isDecodableAddress } from './address.js';
 import type { SearchResult } from './types.js';
+import type { RpcCaller } from '../node/core/rpc.js';
 
 export const HEIGHT_RE = /^\d{1,9}$/;
 export const HEX64_RE = /^[0-9a-fA-F]{64}$/;
@@ -17,13 +18,8 @@ const PROBE_BUDGET_MS = 3000;
 
 export type ProbeResult = 'found' | 'not-found' | 'error';
 
-/** The Core RPC surface a probe needs -- structurally satisfied by CoreRpcClient. */
-export interface SearchCoreRail {
-	call<T>(method: string, params?: unknown[]): Promise<T>;
-}
-
 export interface SearchNode {
-	coreRpc: SearchCoreRail;
+	coreRpc: RpcCaller;
 }
 
 export type { SearchResult };
