@@ -253,3 +253,192 @@ export const getBlockHash = (rpc: CoreRpcClient, height: number) =>
 	rpc.call<string>('getblockhash', [height]);
 export const getBlockHeader = (rpc: CoreRpcClient, hash: string, verbose = true) =>
 	rpc.call<BlockHeader>('getblockheader', [hash, verbose]);
+
+// ── Explorer rail wrappers (EXPLORER.md §1.3/§7 T0) ──────────────────────
+
+export interface RawTxScriptSig {
+	asm: string;
+	hex: string;
+}
+export interface RawTxVin {
+	txid?: string;
+	vout?: number;
+	coinbase?: string;
+	scriptSig?: RawTxScriptSig;
+	txinwitness?: string[];
+	sequence: number;
+}
+export interface RawTxScriptPubKey {
+	asm: string;
+	hex: string;
+	address?: string;
+	type: string;
+}
+export interface RawTxVout {
+	value: number; // BTC, not sats -- caller converts
+	n: number;
+	scriptPubKey: RawTxScriptPubKey;
+}
+/** `getrawtransaction(txid, true)` shape -- decoded vin/vout, NOT prevout
+ *  values/addresses (Core leaves prevout resolution to the caller, §1.5). */
+export interface RawTransaction {
+	txid: string;
+	hash: string;
+	version: number;
+	size: number;
+	vsize: number;
+	weight: number;
+	locktime: number;
+	vin: RawTxVin[];
+	vout: RawTxVout[];
+	hex: string;
+	blockhash?: string;
+	confirmations?: number;
+	blocktime?: number;
+	time?: number;
+}
+
+/** `getblock(hash, 1)` -- header fields + the ordered txid list only (cheap). */
+export interface BlockVerbose1 extends BlockHeader {
+	strippedsize: number;
+	size: number;
+	weight: number;
+	tx: string[];
+}
+/** `getblock(hash, 2)` -- header fields + every tx fully decoded (expensive;
+ *  `chain/blocks.ts` never requests this for a whole block, only verbosity 1
+ *  + a bounded per-tx `getrawtransaction` pass, §1.4). */
+export interface BlockVerbose2 extends BlockHeader {
+	strippedsize: number;
+	size: number;
+	weight: number;
+	tx: RawTransaction[];
+}
+
+export function getRawTransaction(rpc: CoreRpcClient, txid: string, verbose: false): Promise<string>;
+export function getRawTransaction(
+	rpc: CoreRpcClient,
+	txid: string,
+	verbose?: true
+): Promise<RawTransaction>;
+export function getRawTransaction(
+	rpc: CoreRpcClient,
+	txid: string,
+	verbose: boolean = true
+): Promise<string | RawTransaction> {
+	return rpc.call('getrawtransaction', [txid, verbose]);
+}
+
+export function getBlock(rpc: CoreRpcClient, hash: string, verbosity: 0): Promise<string>;
+export function getBlock(rpc: CoreRpcClient, hash: string, verbosity?: 1): Promise<BlockVerbose1>;
+export function getBlock(rpc: CoreRpcClient, hash: string, verbosity: 2): Promise<BlockVerbose2>;
+export function getBlock(
+	rpc: CoreRpcClient,
+	hash: string,
+	verbosity: 0 | 1 | 2 = 1
+): Promise<string | BlockVerbose1 | BlockVerbose2> {
+	return rpc.call('getblock', [hash, verbosity]);
+}
+
+export interface TxOutScriptPubKey {
+	asm: string;
+	hex: string;
+	address?: string;
+	type: string;
+}
+/** `gettxout` -- ONLY sees unspent outputs; null on a spent or unknown output.
+ *  Not used for prevout resolution (§1.3 -- would fail on the common already-
+ *  spent case), only for the tx-detail "spent/unspent" dot on OWN outputs
+ *  where the app doesn't already know the spend from its own wallet data. */
+export interface TxOutResult {
+	bestblock: string;
+	confirmations: number;
+	value: number;
+	scriptPubKey: TxOutScriptPubKey;
+	coinbase: boolean;
+}
+export function getTxOut(
+	rpc: CoreRpcClient,
+	txid: string,
+	n: number,
+	includeMempool = true
+): Promise<TxOutResult | null> {
+	return rpc.call('gettxout', [txid, n, includeMempool]);
+}
+
+export interface MempoolEntryFees {
+	base: number;
+	modified: number;
+	ancestor: number;
+	descendant: number;
+}
+export interface MempoolEntry {
+	vsize: number;
+	weight: number;
+	time: number;
+	height: number;
+	descendantcount: number;
+	descendantsize: number;
+	ancestorcount: number;
+	ancestorsize: number;
+	wtxid: string;
+	fees: MempoolEntryFees;
+	depends: string[];
+	spentby: string[];
+	'bip125-replaceable': boolean;
+}
+/** Fails fast (rejects) when `txid` isn't in the mempool -- CPFP (§1.5.1)
+ *  relies on this to skip ancestor/descendant calls for a confirmed tx. */
+export const getMempoolEntry = (rpc: CoreRpcClient, txid: string) =>
+	rpc.call<MempoolEntry>('getmempoolentry', [txid]);
+
+export function getRawMempool(rpc: CoreRpcClient, verbose: false): Promise<string[]>;
+export function getRawMempool(rpc: CoreRpcClient, verbose: true): Promise<Record<string, MempoolEntry>>;
+export function getRawMempool(
+	rpc: CoreRpcClient,
+	verbose: boolean = false
+): Promise<string[] | Record<string, MempoolEntry>> {
+	return rpc.call('getrawmempool', [verbose]);
+}
+
+export function getMempoolAncestors(rpc: CoreRpcClient, txid: string, verbose: false): Promise<string[]>;
+export function getMempoolAncestors(
+	rpc: CoreRpcClient,
+	txid: string,
+	verbose: true
+): Promise<Record<string, MempoolEntry>>;
+export function getMempoolAncestors(
+	rpc: CoreRpcClient,
+	txid: string,
+	verbose: boolean = false
+): Promise<string[] | Record<string, MempoolEntry>> {
+	return rpc.call('getmempoolancestors', [txid, verbose]);
+}
+
+export function getMempoolDescendants(rpc: CoreRpcClient, txid: string, verbose: false): Promise<string[]>;
+export function getMempoolDescendants(
+	rpc: CoreRpcClient,
+	txid: string,
+	verbose: true
+): Promise<Record<string, MempoolEntry>>;
+export function getMempoolDescendants(
+	rpc: CoreRpcClient,
+	txid: string,
+	verbose: boolean = false
+): Promise<string[] | Record<string, MempoolEntry>> {
+	return rpc.call('getmempooldescendants', [txid, verbose]);
+}
+
+export type EstimateMode = 'UNSET' | 'ECONOMICAL' | 'CONSERVATIVE';
+export interface SmartFeeEstimate {
+	feerate?: number; // BTC/kvB when an estimate exists
+	errors?: string[];
+	blocks: number;
+}
+/** Core's estimator -- the Electrum-down fallback per target in the fee
+ *  ladder (§1.3's fee-recommendation row). */
+export const estimateSmartFee = (
+	rpc: CoreRpcClient,
+	confTarget: number,
+	estimateMode: EstimateMode = 'CONSERVATIVE'
+) => rpc.call<SmartFeeEstimate>('estimatesmartfee', [confTarget, estimateMode]);

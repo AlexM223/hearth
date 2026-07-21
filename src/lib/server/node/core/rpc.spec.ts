@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreRpcClient } from './rpc.js';
+import {
+	getBlock,
+	getRawTransaction,
+	getTxOut,
+	getMempoolEntry,
+	getRawMempool,
+	getMempoolAncestors,
+	getMempoolDescendants,
+	estimateSmartFee
+} from './rpc.js';
 import type { CoreRpcConfig } from '../../config/index.js';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -143,5 +153,108 @@ describe('node/core: RPC client', () => {
 
 		const rpc = new CoreRpcClient(config, { maxRetries: 0 });
 		await expect(rpc.call('getblockcount')).rejects.toThrow(/connection failed/);
+	});
+});
+
+describe('node/core: explorer rail thin wrappers (EXPLORER.md §7 T0)', () => {
+	beforeEach(() => {
+		process.env.HEARTH_TEST_CORE_RPC_PASS = 'test-pass';
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		delete process.env.HEARTH_TEST_CORE_RPC_PASS;
+	});
+
+	function mockRpc(result: unknown): { rpc: CoreRpcClient; fetchMock: ReturnType<typeof vi.fn> } {
+		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { result, error: null, id: 1 }));
+		vi.stubGlobal('fetch', fetchMock);
+		return { rpc: new CoreRpcClient(config), fetchMock };
+	}
+
+	function calledMethodParams(fetchMock: ReturnType<typeof vi.fn>): { method: string; params: unknown[] } {
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(init.body as string) as { method: string; params: unknown[] };
+		return { method: body.method, params: body.params };
+	}
+
+	it('getBlock(hash, 1) calls getblock with verbosity 1 by default', async () => {
+		const { rpc, fetchMock } = mockRpc({ hash: 'abc', tx: ['t1'] });
+		await getBlock(rpc, 'abc');
+		expect(calledMethodParams(fetchMock)).toEqual({ method: 'getblock', params: ['abc', 1] });
+	});
+
+	it('getBlock(hash, 2) requests full tx decode', async () => {
+		const { rpc, fetchMock } = mockRpc({ hash: 'abc', tx: [] });
+		await getBlock(rpc, 'abc', 2);
+		expect(calledMethodParams(fetchMock)).toEqual({ method: 'getblock', params: ['abc', 2] });
+	});
+
+	it('getRawTransaction defaults to verbose=true (decoded, not raw hex)', async () => {
+		const { rpc, fetchMock } = mockRpc({ txid: 'deadbeef', vin: [], vout: [] });
+		await getRawTransaction(rpc, 'deadbeef');
+		expect(calledMethodParams(fetchMock)).toEqual({
+			method: 'getrawtransaction',
+			params: ['deadbeef', true]
+		});
+	});
+
+	it('getRawTransaction(txid, false) requests raw hex', async () => {
+		const { rpc, fetchMock } = mockRpc('0100000...');
+		await getRawTransaction(rpc, 'deadbeef', false);
+		expect(calledMethodParams(fetchMock)).toEqual({
+			method: 'getrawtransaction',
+			params: ['deadbeef', false]
+		});
+	});
+
+	it('getTxOut defaults includeMempool=true and returns null for a spent output', async () => {
+		const { rpc } = mockRpc(null);
+		await expect(getTxOut(rpc, 'deadbeef', 0)).resolves.toBeNull();
+	});
+
+	it('getMempoolEntry rejects (never masks) when the tx is not in the mempool', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				jsonResponse(200, { result: null, error: { code: -5, message: 'Transaction not in mempool' }, id: 1 })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+		const rpc = new CoreRpcClient(config);
+		await expect(getMempoolEntry(rpc, 'deadbeef')).rejects.toThrow(/not in mempool/);
+	});
+
+	it('getRawMempool(false) requests the plain txid array', async () => {
+		const { rpc, fetchMock } = mockRpc(['a', 'b']);
+		await expect(getRawMempool(rpc, false)).resolves.toEqual(['a', 'b']);
+		expect(calledMethodParams(fetchMock).params).toEqual([false]);
+	});
+
+	it('getMempoolAncestors/getMempoolDescendants pass verbose through', async () => {
+		const { rpc: rpc1, fetchMock: fm1 } = mockRpc(['p1']);
+		await getMempoolAncestors(rpc1, 'deadbeef', false);
+		expect(calledMethodParams(fm1)).toEqual({ method: 'getmempoolancestors', params: ['deadbeef', false] });
+
+		const { rpc: rpc2, fetchMock: fm2 } = mockRpc(['c1']);
+		await getMempoolDescendants(rpc2, 'deadbeef', false);
+		expect(calledMethodParams(fm2)).toEqual({
+			method: 'getmempooldescendants',
+			params: ['deadbeef', false]
+		});
+	});
+
+	it('estimateSmartFee defaults to CONSERVATIVE mode', async () => {
+		const { rpc, fetchMock } = mockRpc({ feerate: 0.00001, blocks: 6 });
+		await estimateSmartFee(rpc, 6);
+		expect(calledMethodParams(fetchMock)).toEqual({
+			method: 'estimatesmartfee',
+			params: [6, 'CONSERVATIVE']
+		});
+	});
+
+	it('estimateSmartFee surfaces a no-estimate response honestly (no feerate field)', async () => {
+		const { rpc } = mockRpc({ errors: ['Insufficient data'], blocks: 0 });
+		const result = await estimateSmartFee(rpc, 1);
+		expect(result.feerate).toBeUndefined();
+		expect(result.errors).toEqual(['Insufficient data']);
 	});
 });
