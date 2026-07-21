@@ -18,6 +18,7 @@ import {
 } from '$lib/server/auth/index.js';
 import { initNodeClient } from '$lib/server/node/index.js';
 import { startBlockWatcher } from '$lib/server/node/watcher.js';
+import { startMempoolTicker } from '$lib/server/chain/index.js';
 import { log } from '$lib/server/log.js';
 
 const config = loadConfig();
@@ -27,6 +28,7 @@ await bootstrapAdminFromEnv();
 
 const nodeClient = initNodeClient(config.electrum, config.core);
 startBlockWatcher(nodeClient);
+startMempoolTicker(nodeClient);
 
 log('boot', { phase: 'ready', platform: config.platform, dbPath: config.dbPath });
 

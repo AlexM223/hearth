@@ -72,3 +72,4 @@ export {
 	type SnapshotData,
 	type SnapshotNode
 } from './snapshot.js';
+export { startMempoolTicker, type MempoolTicker, type MempoolTickerNode } from './mempoolTicker.js';

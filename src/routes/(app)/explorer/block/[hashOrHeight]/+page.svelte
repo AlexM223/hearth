@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Block detail (EXPLORER.md §3.3): hairlines not boxes, a label:value
 	// grid, a paginated tx list, raw header bytes behind Advanced.
+	import { onMount } from 'svelte';
 	import { formatSats } from '$lib/format.js';
 	import DegradeBanner from '$lib/components/DegradeBanner.svelte';
 	import FeeChip from '$lib/components/FeeChip.svelte';
@@ -17,6 +18,26 @@
 	// svelte-ignore state_referenced_locally
 	let hasMore = $state(data.txPage.hasMore);
 	let loadingMore = $state(false);
+
+	// SSE (T8): a still-shallow block's confirmations bump client-side from
+	// the `block` frame's height alone -- no refetch needed just to bump a
+	// number (EXPLORER.md §4/§7 T8's accept line).
+	let liveConfirmations = $state<number | null>(null);
+	let confirmations = $derived(liveConfirmations ?? data.detail.confirmations);
+
+	onMount(() => {
+		if (data.detail.confirmations === null || data.detail.confirmations >= 6) return;
+		const source = new EventSource('/api/events');
+		source.addEventListener('block', (event: MessageEvent) => {
+			try {
+				const payload = JSON.parse(event.data) as { height: number };
+				liveConfirmations = payload.height - data.detail.height + 1;
+			} catch {
+				// ignore malformed frames
+			}
+		});
+		return () => source.close();
+	});
 
 	async function copyHash() {
 		try {
@@ -67,7 +88,7 @@
 		</div>
 		<div class="header hairline">
 			<span class="t-label">Confirmations</span>
-			<span class="t-label value">{data.detail.confirmations ?? '—'}</span>
+			<span class="t-label value">{confirmations ?? '—'}</span>
 		</div>
 
 		{#if data.detail.richness === 'basic'}

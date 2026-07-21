@@ -2,6 +2,8 @@
 	// Tx detail (EXPLORER.md §3.4): a status pill (never red for merely
 	// unconfirmed), amount/fee/rate, two hairline-separated in/out lists,
 	// raw hex/scriptSig/witness behind Advanced.
+	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { formatSats } from '$lib/format.js';
 	import DegradeBanner from '$lib/components/DegradeBanner.svelte';
 	import FeeChip from '$lib/components/FeeChip.svelte';
@@ -11,6 +13,33 @@
 
 	let advanced = $state(false);
 	let totalOut = $derived(data.detail ? data.detail.vout.reduce((s, o) => s + o.value, 0) : 0);
+
+	// SSE (T8): a still-shallow CONFIRMED tx bumps its confirmations count
+	// client-side from the frame's height alone; an UNCONFIRMED tx re-fetches
+	// its own detail once per block tick (to pick up a possible confirmation)
+	// rather than guessing (EXPLORER.md §4's accept line).
+	let liveConfirmations = $state<number | null>(null);
+	let confirmations = $derived(liveConfirmations ?? data.detail?.confirmations ?? null);
+
+	onMount(() => {
+		const detail = data.detail;
+		if (!detail) return;
+		const source = new EventSource('/api/events');
+		source.addEventListener('block', (event: MessageEvent) => {
+			if (detail.confirmed) {
+				if (detail.blockHeight === null || (detail.confirmations ?? 0) >= 6) return;
+				try {
+					const payload = JSON.parse(event.data) as { height: number };
+					liveConfirmations = payload.height - detail.blockHeight + 1;
+				} catch {
+					// ignore malformed frames
+				}
+			} else {
+				void invalidateAll(); // re-fetches this page's load(), picking up a possible confirmation
+			}
+		});
+		return () => source.close();
+	});
 
 	function cpfpNote(cpfp: NonNullable<NonNullable<PageProps['data']['detail']>['cpfp']>): string | null {
 		if (cpfp.boostedByDescendant) return 'Sped up by a later transaction';
@@ -46,7 +75,7 @@
 			<div><span class="t-label muted">Amount</span><span class="t-label value">{formatSats(totalOut)} sats</span></div>
 			<div><span class="t-label muted">Fee</span><span class="t-label value">{detail.fee !== null ? `${formatSats(detail.fee)} sats` : '—'}</span></div>
 			<div><span class="t-label muted">Fee rate</span><FeeChip feeRate={detail.feeRate} /></div>
-			<div><span class="t-label muted">Confirmations</span><span class="t-label value">{formatSats(detail.confirmations)}</span></div>
+			<div><span class="t-label muted">Confirmations</span><span class="t-label value">{formatSats(confirmations ?? 0)}</span></div>
 		</div>
 
 		{#if detail.blockContext.richness === 'basic'}

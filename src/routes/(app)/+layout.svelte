@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import type { LayoutProps } from './$types';
 
@@ -15,6 +16,44 @@
 	function isActive(href: string): boolean {
 		return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 	}
+
+	// Global search (EXPLORER.md §3.6, the 2-clicks law): one search input in
+	// the top nav, reachable from every authenticated page -- the shared
+	// instrument's ONE search surface (never duplicated per-page).
+	let searchQuery = $state('');
+	let searchBusy = $state(false);
+	let searchNotice = $state<string | null>(null);
+	let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function flashNotice(message: string) {
+		searchNotice = message;
+		if (noticeTimer) clearTimeout(noticeTimer);
+		noticeTimer = setTimeout(() => (searchNotice = null), 4000);
+	}
+
+	async function runSearch() {
+		const q = searchQuery.trim();
+		if (!q || searchBusy) return;
+		searchBusy = true;
+		try {
+			const res = await fetch(`/api/chain/search?q=${encodeURIComponent(q)}`);
+			if (!res.ok) {
+				flashNotice('Search failed -- try again.');
+				return;
+			}
+			const result = (await res.json()) as { type: 'block' | 'tx' | 'address' | 'unknown'; value: string };
+			if (result.type === 'unknown') {
+				flashNotice('Nothing matches that search — check for typos');
+				return;
+			}
+			searchQuery = '';
+			await goto(`/explorer/${result.type}/${encodeURIComponent(result.value)}`);
+		} catch {
+			flashNotice('Search failed -- try again.');
+		} finally {
+			searchBusy = false;
+		}
+	}
 </script>
 
 <div class="shell">
@@ -29,6 +68,20 @@
 				<a href={item.href} class:active={isActive(item.href)}>{item.label}</a>
 			{/each}
 		</nav>
+
+		<form class="search" onsubmit={(e) => (e.preventDefault(), runSearch())}>
+			<input
+				class="search-input t-mono"
+				type="search"
+				placeholder="Search a block, transaction, or address"
+				bind:value={searchQuery}
+				aria-label="Search a block, transaction, or address"
+			/>
+			<button class="search-btn" type="submit" disabled={searchBusy} aria-label="Search">🔍</button>
+		</form>
+		{#if searchNotice}
+			<p class="search-notice t-label" role="status">{searchNotice}</p>
+		{/if}
 
 		<div class="topnav-actions">
 			<span class="badge-no-cloud">No cloud &middot; No telemetry</span>
@@ -62,6 +115,7 @@
 	}
 
 	.topnav {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
@@ -112,6 +166,54 @@
 	.settings-link.active {
 		color: var(--accent);
 		border-bottom-color: var(--accent);
+	}
+
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		background: var(--bg-input);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-pill);
+		padding: 4px 4px 4px 12px;
+	}
+
+	.search-input {
+		background: none;
+		border: none;
+		color: var(--text);
+		font-size: var(--t-label);
+		width: 220px;
+		outline: none;
+	}
+
+	.search-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.search-btn {
+		background: none;
+		border: none;
+		border-radius: var(--radius-pill);
+		padding: 4px 10px;
+		cursor: pointer;
+		color: var(--text-secondary);
+	}
+
+	.search-btn:hover {
+		color: var(--text);
+	}
+
+	.search-notice {
+		position: absolute;
+		top: 56px;
+		right: var(--space-4);
+		background: var(--surface-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-input);
+		padding: 8px 14px;
+		color: var(--text-secondary);
+		z-index: 10;
 	}
 
 	.topnav-actions {

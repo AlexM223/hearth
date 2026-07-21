@@ -3,6 +3,7 @@
 	// EXPLORER.md §3.2), the one glanceable fee number (§3.1), and a
 	// readable recent-blocks strip. Own-node only, no third-party API ever.
 	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { formatSats } from '$lib/format.js';
 	import { bucketFeeHistogram, type FeeBand } from '$lib/explorerFlow.js';
 	import DegradeBanner from '$lib/components/DegradeBanner.svelte';
@@ -16,10 +17,12 @@
 	// server-loaded snapshot, then the onMount fetch below overwrites it live.
 	let mempoolRichness = $state<'none' | 'basic' | 'full'>(data.mempool?.richness ?? 'none');
 
-	// The fee histogram isn't part of the persisted snapshot (it's a live,
-	// fast-changing datum, §1.8) -- fetched client-side so the page's own
-	// load() stays rail-free (the SWR contract).
-	onMount(async () => {
+	// Live overlay from the `mempool` SSE topic (T8) -- layered on top of the
+	// server-rendered fees.satPerVb, same pattern Home uses for tip height.
+	let liveSatPerVb = $state<number | null>(null);
+	let satPerVb = $derived(liveSatPerVb ?? data.fees?.satPerVb ?? null);
+
+	async function fetchHistogram() {
 		try {
 			const res = await fetch('/api/chain/mempool');
 			if (!res.ok) return;
@@ -31,6 +34,40 @@
 		} catch {
 			// The flow chart's mempool zone stays empty -- never a crash.
 		}
+	}
+
+	onMount(() => {
+		// The fee histogram isn't part of the persisted snapshot (it's a live,
+		// fast-changing datum, §1.8) -- fetched client-side so the page's own
+		// load() stays rail-free (the SWR contract).
+		void fetchHistogram();
+
+		// SSE (T8): a new block prepends live -- POST /api/chain/refresh (the
+		// throttled/single-flight snapshot writer) then invalidateAll() re-runs
+		// this page's load() and re-renders from the fresh snapshot, all
+		// without a full page reload (SvelteKit's own fetch-based re-run).
+		const source = new EventSource('/api/events');
+		source.addEventListener('block', () => {
+			void (async () => {
+				try {
+					await fetch('/api/chain/refresh', { method: 'POST' });
+				} catch {
+					// best-effort -- invalidateAll() below still picks up whatever
+					// snapshot is currently persisted, never worse than before.
+				}
+				await invalidateAll();
+				await fetchHistogram();
+			})();
+		});
+		source.addEventListener('mempool', (event: MessageEvent) => {
+			try {
+				const payload = JSON.parse(event.data) as { satPerVb: number | null; txCount: number | null };
+				if (payload.satPerVb !== null) liveSatPerVb = payload.satPerVb;
+			} catch {
+				// ignore malformed frames
+			}
+		});
+		return () => source.close();
 	});
 
 	// Right-to-left: newest immediately right of the divider (index 0), older
@@ -48,7 +85,7 @@
 <section class="panel fee-headline">
 	<p class="t-micro">Fee to send</p>
 	{#if data.fees}
-		<p class="t-stat">{data.fees.satPerVb} sat/vB</p>
+		<p class="t-stat">{satPerVb} sat/vB</p>
 		<p class="t-label caption">{feeCaption()}</p>
 		{#if data.fees.richness === 'basic'}
 			<DegradeBanner richness="basic" basicMessage="Only one rail answered -- this estimate may be less precise." />
