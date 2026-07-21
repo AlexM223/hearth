@@ -22,7 +22,10 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/hearth
+  # Hardcoded lowercase, not ${{ github.repository_owner }}: Docker repository
+  # names must be lowercase and the GitHub login is "AlexM223" -- buildx
+  # rejects the uppercase tag outright ("repository name must be lowercase").
+  IMAGE_NAME: alexm223/hearth
 
 jobs:
   build-and-push:
