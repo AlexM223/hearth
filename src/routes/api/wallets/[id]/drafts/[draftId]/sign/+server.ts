@@ -1,10 +1,18 @@
 /**
  * POST /api/wallets/[id]/drafts/[draftId]/sign -- merge an externally-produced
- * signed PSBT (WebHID / air-gap file / BBQr) into a draft. Owner/cosigner only.
+ * signed PSBT (WebHID / air-gap file / BBQr) into a draft.
+ *
+ * Owner-only for now (SIGNING.md §2.4): the eventual rule is owner OR an
+ * assigned cosigner (a member whose wallet_keys row is in this draft's
+ * frozen roster), but that widening is gated on M3's resolveWalletRole
+ * returning cosigner roles -- M2 returns only 'owner'/'viewer'/'none'. This
+ * comment marks the exact line to change when M3 lands; do NOT widen
+ * `/broadcast` alongside it (that stays owner-only permanently).
  */
 import { json, error, type RequestEvent } from '@sveltejs/kit';
 import { getWallet, applySignature, resolveWalletRole } from '$lib/server/wallet/index.js';
 import { httpStatusFor } from '$lib/server/wallet/errors.js';
+import { publish } from '$lib/server/events/index.js';
 
 export async function POST(event: RequestEvent) {
 	const user = event.locals.user;
@@ -29,6 +37,12 @@ export async function POST(event: RequestEvent) {
 	}
 	try {
 		const { review, progress } = applySignature(user.id, walletId, draftId, body.psbt);
+		// Watchtower SSE (CosignerProgress.svelte's live roster, SIGNING.md
+		// §2.3). Scoped to the owner's own connections for now (M2 has no
+		// cosigner accounts); cross-member visibility arrives with M3's role
+		// widening above. Frame data is already in hand -- publish() never
+		// reads SQLite (DECISIONS.md §4.5).
+		publish('wallet', { kind: 'user', userId: user.id }, { event: 'sign', walletId, draftId, progress });
 		return json({ review, progress });
 	} catch (e) {
 		const { status, message } = httpStatusFor(e);

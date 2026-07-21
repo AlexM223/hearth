@@ -4,10 +4,12 @@
 	// same POST /sign, and this component just re-renders `progress` from
 	// whatever the method returns. BROWSER-SIDE component -- never imports
 	// $lib/server (SIGNING.md §0.3).
+	import { onMount } from 'svelte';
 	import type { SigningProgress, SigningWalletContext } from '$lib/shared/signing.js';
 	import SignWithFile from './SignWithFile.svelte';
 	import SignWithQr from './SignWithQr.svelte';
 	import SignWithDevice from './SignWithDevice.svelte';
+	import CosignerProgress from './CosignerProgress.svelte';
 
 	type Method = 'file' | 'qr' | 'device';
 
@@ -30,6 +32,34 @@
 	let method = $state<Method | null>(null);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+
+	const cosignerNames = $derived(
+		Object.fromEntries(wallet.keys.map((k) => [k.fingerprint, k.name ?? k.fingerprint]))
+	);
+
+	// Live roster updates (SIGNING.md §2.3): a signature gathered from
+	// another open tab/device shows up here without a manual refresh. Scoped
+	// to the owner's own connections until M3 adds cosigner accounts.
+	onMount(() => {
+		if (wallet.kind !== 'multisig') return;
+		const source = new EventSource('/api/events');
+		source.addEventListener('wallet', (event: MessageEvent) => {
+			try {
+				const payload = JSON.parse(event.data) as {
+					event?: string;
+					walletId?: number;
+					draftId?: number;
+					progress?: SigningProgress;
+				};
+				if (payload.event === 'sign' && payload.walletId === walletId && payload.draftId === draftId && payload.progress) {
+					progress = payload.progress;
+				}
+			} catch {
+				// Ignore malformed frames -- never let a bad push break the page.
+			}
+		});
+		return () => source.close();
+	});
 
 	async function submitSignedPsbt(signedPsbt: string) {
 		error = null;
@@ -61,7 +91,9 @@
 
 <section class="sign-step">
 	<p class="t-micro">How do you want to sign?</p>
-	{#if progress.complete}
+	{#if wallet.kind === 'multisig'}
+		<CosignerProgress {progress} {cosignerNames} />
+	{:else if progress.complete}
 		<p class="t-label ready">All signatures collected -- ready to send.</p>
 	{:else}
 		<p class="t-label hint">
@@ -71,7 +103,9 @@
 		</p>
 	{/if}
 
-	{#if !method}
+	{#if progress.complete}
+		<!-- Quorum met -- nothing more to gather; the slider above takes over. -->
+	{:else if !method}
 		<div class="tiles">
 			<button class="tile" type="button" onclick={() => (method = 'device')} disabled={busy}>
 				<span class="t-label">Sign with device</span>
