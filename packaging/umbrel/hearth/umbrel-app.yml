@@ -40,5 +40,6 @@ deterministicPassword: true
 backupIgnore:
   - data/logs
   - data/tls
+  - data/secret.key
 submitter: Alex Martinez
 submission: https://github.com/getumbrel/umbrel-apps/pull/0000

@@ -19,12 +19,17 @@ import {
 import { initNodeClient } from '$lib/server/node/index.js';
 import { startBlockWatcher } from '$lib/server/node/watcher.js';
 import { startMempoolTicker } from '$lib/server/chain/index.js';
+import { initSecretKey } from '$lib/server/notify/config/secrets.js';
 import { log } from '$lib/server/log.js';
 
 const config = loadConfig();
 const db = openDb(config.dbPath);
 runMigrations(db);
 await bootstrapAdminFromEnv();
+// M6 watchtower: the instance secret-key file backing AES-256-GCM envelopes
+// for channel bearer secrets (WATCHTOWER.md §2.3). Idempotent; independent of
+// the watchtower detector/queue workers themselves (T8 wires those).
+initSecretKey(config.dataDir);
 
 const nodeClient = initNodeClient(config.electrum, config.core);
 startBlockWatcher(nodeClient);
