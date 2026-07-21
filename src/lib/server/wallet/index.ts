@@ -27,3 +27,41 @@ export type {
 	DraftRow,
 	RedactedDraft
 } from './types.js';
+
+import type { Wallet, WalletAddress } from './types.js';
+import { selectEngine } from './script/engine.js';
+import { scriptToScripthash } from './derive.js';
+import { hex } from '@scure/base';
+
+/**
+ * Derive `count` addresses on a chain starting at `fromIndex` (WALLET-ENGINE
+ * §2.3). Pure/sync, ECC-free encoding. Single-sig derives one pubkey; multisig
+ * derives N, BIP-67-sorts and builds sortedmulti -- all inside the ScriptEngine
+ * (the only kind switch). balanceSats/txCount are 0 here; the scan fills them.
+ */
+export function deriveAddresses(
+	wallet: Wallet,
+	chain: 0 | 1,
+	fromIndex: number,
+	count: number
+): WalletAddress[] {
+	const engine = selectEngine(wallet);
+	const out: WalletAddress[] = [];
+	for (let i = 0; i < count; i++) {
+		const index = fromIndex + i;
+		const script = engine.scriptFor(chain, index);
+		out.push({
+			address: script.address,
+			chain,
+			index,
+			scripthash: scriptToScripthash(script.scriptPubKey),
+			scriptPubKey: hex.encode(script.scriptPubKey),
+			used: false,
+			balanceSats: 0,
+			txCount: 0
+		});
+	}
+	return out;
+}
+
+export { selectEngine } from './script/engine.js';
