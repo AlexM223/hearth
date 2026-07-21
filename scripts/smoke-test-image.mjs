@@ -37,7 +37,7 @@
  * Requires Docker. Exits non-zero on any failed assertion.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, existsSync, readdirSync, statSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, existsSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -52,6 +52,15 @@ if (!image) {
 
 const containerName = `hearth-smoke-${Date.now()}`;
 const dataDir = mkdtempSync(path.join(tmpdir(), 'hearth-smoke-'));
+// The container runs as uid 1000 (the Dockerfile's hearth user), but this
+// temp dir is owned by whatever uid runs the script -- on a Linux CI runner
+// that's uid 1001, and the bind-mounted /data is then unwritable, crashing
+// boot with "unable to open database file" (caught by the first real GHCR
+// release run). Real umbrelOS chowns app data to 1000:1000 before the
+// container starts; opening the throwaway dir up with 0777 stands in for
+// that here. Windows/Docker Desktop mounts don't carry real uid bits, so
+// chmod is a no-op there anyway.
+if (process.platform !== 'win32') chmodSync(dataDir, 0o777);
 const port = 18173;
 
 function run(cmd, args, opts = {}) {
