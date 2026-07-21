@@ -1,4 +1,4 @@
-﻿manifestVersion: 1
+manifestVersion: 1
 id: ingle-hearth
 # Community-store convention differs from the official store here: `icon:`
 # is expected as a real hosted URL (the official-store skill's "omit icon"
