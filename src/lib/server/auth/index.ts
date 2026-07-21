@@ -1,12 +1,37 @@
 /**
- * Auth module -- password auth, sessions, invites, roles (DECISIONS.md §4.3).
- * Stub for M0. Built in M1 (scrypt password auth + `hearth_session` cookie,
- * deterministic first-run admin) and M3 (invite-by-link, three-tier roles).
+ * Auth module public surface (DECISIONS.md §4.3) -- password auth, sessions,
+ * first-run bootstrap now; invites + three-tier role enforcement land in M3.
+ * Other modules import from here only -- never reach into the sibling files
+ * directly.
  */
 export type Role = 'owner' | 'member' | 'guest';
 
-export interface SessionUser {
-	id: number;
-	username: string;
-	role: Role;
-}
+export {
+	hashPassword,
+	verifyPassword,
+	MIN_PASSWORD_LENGTH
+} from './password.js';
+
+export {
+	SESSION_COOKIE,
+	createSession,
+	getSessionUser,
+	destroySession,
+	destroyUserSessions,
+	cookieSecure,
+	setSessionCookie,
+	clearSessionCookie,
+	hashToken,
+	type SessionUser
+} from './session.js';
+
+export {
+	AuthError,
+	userCount,
+	getUserById,
+	loginWithPassword,
+	bootstrapAdminFromEnv,
+	mustResetPassword,
+	completeForcedCredentialReset,
+	type AuthUser
+} from './users.js';

@@ -15,8 +15,10 @@ export interface Migration {
 
 // Import order doesn't matter -- runMigrations sorts by id.
 import { migration001Init } from './migrations/001_init.js';
+import { migration002SessionsInvites } from './migrations/002_sessions_invites.js';
+import { migration003Events } from './migrations/003_events.js';
 
-const migrations: Migration[] = [migration001Init];
+const migrations: Migration[] = [migration001Init, migration002SessionsInvites, migration003Events];
 
 /** Applies every migration that hasn't run yet, in id order, inside its own transaction. */
 export function runMigrations(db: DatabaseSync): void {
