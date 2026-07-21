@@ -1,0 +1,255 @@
+/**
+ * All wallet-engine SQL (WALLET-ENGINE §0.3). node:sqlite, synchronous, no ORM.
+ * ONE wallets/wallet_keys/addresses/utxos/transactions/psbt_drafts schema --
+ * kind is a column, never a second table. Every function is kind-blind.
+ *
+ * Discipline (DECISIONS.md §2): callers precompute async work before opening a
+ * transaction; these helpers are synchronous and safe inside withTransaction.
+ */
+import type { DatabaseSync } from 'node:sqlite';
+import { getDb, withTransaction } from '../db/index.js';
+import type {
+	ChainNetwork,
+	CosignerKey,
+	DraftRow,
+	DraftStatus,
+	ScriptType,
+	Wallet,
+	WalletKind
+} from './types.js';
+
+// ------------------------------------------------------------------- row types
+
+interface WalletRow {
+	id: number;
+	user_id: number;
+	name: string;
+	kind: WalletKind;
+	script_type: ScriptType;
+	network: ChainNetwork;
+	threshold: number;
+	descriptor: string | null;
+	receive_cursor: number;
+	change_cursor: number;
+	source: 'created' | 'imported';
+	created_at: string;
+}
+
+interface WalletKeyRow {
+	position: number;
+	name: string | null;
+	category: string | null;
+	device_type: string | null;
+	xpub: string;
+	fingerprint: string;
+	path: string;
+	assigned_user_id: number | null;
+}
+
+// ------------------------------------------------------------------ hydration
+
+function hydrateKey(row: WalletKeyRow): CosignerKey {
+	return {
+		position: row.position,
+		xpub: row.xpub,
+		fingerprint: row.fingerprint,
+		path: row.path,
+		name: row.name ?? undefined,
+		category: row.category ?? undefined,
+		deviceType: row.device_type,
+		assignedUserId: row.assigned_user_id
+	};
+}
+
+function hydrateWallet(row: WalletRow, keys: CosignerKey[]): Wallet {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		name: row.name,
+		kind: row.kind,
+		scriptType: row.script_type,
+		network: row.network,
+		threshold: row.threshold,
+		descriptor: row.descriptor,
+		receiveCursor: row.receive_cursor,
+		changeCursor: row.change_cursor,
+		source: row.source,
+		keys,
+		createdAt: row.created_at
+	};
+}
+
+// --------------------------------------------------------------- wallet writes
+
+export interface NewWallet {
+	userId: number;
+	name: string;
+	kind: WalletKind;
+	scriptType: ScriptType;
+	network: ChainNetwork;
+	threshold: number;
+	descriptor: string | null;
+	source: 'created' | 'imported';
+	keys: Array<{
+		position: number;
+		xpub: string;
+		fingerprint: string;
+		path: string;
+		name?: string | null;
+		category?: string | null;
+		deviceType?: string | null;
+		assignedUserId?: number | null;
+	}>;
+}
+
+/** Persist a wallet + its keys atomically. Returns the new wallet id. */
+export function insertWallet(input: NewWallet): number {
+	return withTransaction((db) => {
+		const res = db
+			.prepare(
+				`INSERT INTO wallets (user_id, name, kind, script_type, network, threshold, descriptor, source)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+			)
+			.run(
+				input.userId,
+				input.name,
+				input.kind,
+				input.scriptType,
+				input.network,
+				input.threshold,
+				input.descriptor,
+				input.source
+			);
+		const walletId = Number(res.lastInsertRowid);
+		const insKey = db.prepare(
+			`INSERT INTO wallet_keys (wallet_id, position, name, category, device_type, xpub, fingerprint, path, assigned_user_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		);
+		for (const k of input.keys) {
+			insKey.run(
+				walletId,
+				k.position,
+				k.name ?? null,
+				k.category ?? null,
+				k.deviceType ?? null,
+				k.xpub,
+				k.fingerprint,
+				k.path,
+				k.assignedUserId ?? null
+			);
+		}
+		return walletId;
+	});
+}
+
+// --------------------------------------------------------------- wallet reads
+
+function loadKeys(db: DatabaseSync, walletId: number): CosignerKey[] {
+	const rows = db
+		.prepare(
+			`SELECT position, name, category, device_type, xpub, fingerprint, path, assigned_user_id
+			 FROM wallet_keys WHERE wallet_id = ? ORDER BY position ASC`
+		)
+		.all(walletId) as unknown as WalletKeyRow[];
+	return rows.map(hydrateKey);
+}
+
+/** Fetch a wallet scoped to its owner (ownership gate). Null if absent/foreign. */
+export function getWalletRow(userId: number, walletId: number): Wallet | null {
+	const db = getDb();
+	const row = db
+		.prepare('SELECT * FROM wallets WHERE id = ? AND user_id = ?')
+		.get(walletId, userId) as WalletRow | undefined;
+	if (!row) return null;
+	return hydrateWallet(row, loadKeys(db, walletId));
+}
+
+/** Fetch a wallet by id WITHOUT the owner scope -- for internal engine use only
+ *  (sync/scan/broadcast already resolved authorization). Never call from a route
+ *  without a role check. */
+export function getWalletRowUnscoped(walletId: number): Wallet | null {
+	const db = getDb();
+	const row = db.prepare('SELECT * FROM wallets WHERE id = ?').get(walletId) as
+		| WalletRow
+		| undefined;
+	if (!row) return null;
+	return hydrateWallet(row, loadKeys(db, walletId));
+}
+
+export function listWalletRows(userId: number): Wallet[] {
+	const db = getDb();
+	const rows = db
+		.prepare('SELECT * FROM wallets WHERE user_id = ? ORDER BY id ASC')
+		.all(userId) as unknown as WalletRow[];
+	return rows.map((row) => hydrateWallet(row, loadKeys(db, row.id)));
+}
+
+export function deleteWalletRow(userId: number, walletId: number): boolean {
+	const db = getDb();
+	const res = db.prepare('DELETE FROM wallets WHERE id = ? AND user_id = ?').run(walletId, userId);
+	return Number(res.changes) > 0;
+}
+
+/** Advance the receive/change cursors (after a scan or a receive rotation). */
+export function updateCursors(walletId: number, receiveCursor: number, changeCursor: number): void {
+	getDb()
+		.prepare('UPDATE wallets SET receive_cursor = ?, change_cursor = ? WHERE id = ?')
+		.run(receiveCursor, changeCursor, walletId);
+}
+
+// --------------------------------------------------------------- draft reads
+// (writes land with the build/broadcast steps; these reads are shared.)
+
+interface DraftDbRow {
+	id: number;
+	wallet_id: number;
+	created_by: number;
+	status: DraftStatus;
+	psbt: string;
+	txid: string | null;
+	recipients: string;
+	amount_sats: number;
+	fee_sats: number;
+	fee_rate: number;
+	change_index: number | null;
+	replaces_txid: string | null;
+	broadcast_started_at: string | null;
+	created_at: string;
+	updated_at: string;
+	expires_at: string;
+}
+
+export function hydrateDraft(row: DraftDbRow): DraftRow {
+	return {
+		id: row.id,
+		walletId: row.wallet_id,
+		createdBy: row.created_by,
+		status: row.status,
+		psbt: row.psbt,
+		txid: row.txid,
+		recipients: JSON.parse(row.recipients),
+		amountSats: row.amount_sats,
+		feeSats: row.fee_sats,
+		feeRate: row.fee_rate,
+		changeIndex: row.change_index,
+		replacesTxid: row.replaces_txid,
+		broadcastStartedAt: row.broadcast_started_at,
+		createdAt: row.created_at,
+		updatedAt: row.updated_at,
+		expiresAt: row.expires_at
+	};
+}
+
+export function getDraftRow(walletId: number, draftId: number): DraftRow | null {
+	const row = getDb()
+		.prepare('SELECT * FROM psbt_drafts WHERE id = ? AND wallet_id = ?')
+		.get(draftId, walletId) as DraftDbRow | undefined;
+	return row ? hydrateDraft(row) : null;
+}
+
+export function listDraftRows(walletId: number): DraftRow[] {
+	const rows = getDb()
+		.prepare('SELECT * FROM psbt_drafts WHERE wallet_id = ? ORDER BY id DESC')
+		.all(walletId) as unknown as DraftDbRow[];
+	return rows.map(hydrateDraft);
+}

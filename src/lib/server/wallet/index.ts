@@ -65,3 +65,13 @@ export function deriveAddresses(
 }
 
 export { selectEngine } from './script/engine.js';
+
+export {
+	importWallet,
+	getWallet,
+	listWallets,
+	deleteWallet,
+	walletToDescriptor,
+	parseDescriptor,
+	type ImportInput
+} from './import.js';
