@@ -9,12 +9,25 @@
 	// what THIS device renders (localStorage stays authoritative for the
 	// pre-paint script), but every change is also best-effort mirrored to the
 	// server-persisted account preference so /me agrees with it.
-	import { readStoredTheme, applyThemeLocally, mirrorThemeToServer, type ThemeChoice } from '$lib/theme.js';
+	//
+	// hearth-7w6: `choice` used to be `$state(readStoredTheme())` -- seeded
+	// ONCE at mount and only ever reassigned by this toggle's own clicks. This
+	// component lives in the shared layout and never remounts on client-side
+	// navigation, so after /me's Display form changed the theme (no reload),
+	// the header kept showing the OLD label even though localStorage/
+	// data-theme/the rendered page were already correct. `choice` is now a
+	// `$derived` read of $lib/theme.svelte.ts's shared reactive `current`, so
+	// it re-renders on every change from EITHER control (and cross-tab).
+	import {
+		getTheme,
+		applyThemeLocally,
+		mirrorThemeToServer,
+		type ThemeChoice
+	} from '$lib/theme.svelte.js';
 
-	let choice = $state<ThemeChoice>(readStoredTheme());
+	let choice = $derived(getTheme());
 
 	function apply(next: ThemeChoice) {
-		choice = next;
 		applyThemeLocally(next);
 		void mirrorThemeToServer(next);
 	}

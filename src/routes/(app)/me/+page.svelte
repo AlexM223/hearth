@@ -3,7 +3,7 @@
 	// Guest changes their own password since Settings is Owner-only.
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
-	import { readStoredTheme, applyThemeLocally, type ThemeChoice } from '$lib/theme.js';
+	import { getTheme, applyThemeLocally, type ThemeChoice } from '$lib/theme.svelte.js';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -13,13 +13,15 @@
 	// toggle never wrote to -- so this could show "System" selected while the
 	// page itself was actually rendering Dark. `liveTheme` starts from the
 	// server value (SSR-safe) then, on mount, is overridden by the SAME live
-	// source the header toggle writes to (localStorage) -- the sweep's own
-	// suggested fix.
+	// source the header toggle writes to ($lib/theme.svelte.ts's shared
+	// `current`, via getTheme()) -- the sweep's own suggested fix. `liveTheme`
+	// stays its own local $state (not a $derived of getTheme()) because it
+	// also has to be directly writable by the radio group's bind:group below.
 	// svelte-ignore state_referenced_locally -- SSR-safe seed, overridden by
-	// the live localStorage value in onMount below.
+	// the live theme value in onMount below.
 	let liveTheme = $state<ThemeChoice>(data.prefs.theme);
 	onMount(() => {
-		liveTheme = readStoredTheme();
+		liveTheme = getTheme();
 	});
 </script>
 

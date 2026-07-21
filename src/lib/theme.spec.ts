@@ -16,7 +16,13 @@
  * Storage/Element subset theme.ts touches.
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { readStoredTheme, applyThemeLocally, mirrorThemeToServer } from './theme.js';
+import {
+	readStoredTheme,
+	applyThemeLocally,
+	mirrorThemeToServer,
+	getTheme,
+	handleStorageEvent
+} from './theme.svelte.js';
 
 function fakeStorage() {
 	const store = new Map<string, string>();
@@ -97,5 +103,67 @@ describe('theme.ts: localStorage stays the single client-side source of truth (h
 			'/api/me/prefs',
 			expect.objectContaining({ method: 'POST', body: JSON.stringify({ theme: 'light' }) })
 		);
+	});
+
+	describe('getTheme() is a single SHARED reactive source, not a per-caller snapshot (hearth-7w6)', () => {
+		// Regression for hearth-7w6: ThemeToggle used to seed a private,
+		// non-reactive `$state(readStoredTheme())` once at mount, so it only
+		// ever reflected ITS OWN clicks -- after /me's Display form changed the
+		// theme (a "different reader"), the header kept showing the stale
+		// value. getTheme() must return the NEW value to every caller the
+		// instant ANY caller applies a change, with no re-mount / re-read
+		// needed in between -- that's what makes it "shared", not just
+		// "another way to read localStorage".
+
+		it('reflects a change made by one reader immediately, for every other reader, with no re-import or re-read needed', () => {
+			applyThemeLocally('dark');
+			// Simulates the header ThemeToggle's $derived(getTheme()) re-evaluating
+			// after /me's Display form (a different call site) applied the change.
+			expect(getTheme()).toBe('dark');
+
+			applyThemeLocally('light');
+			expect(getTheme()).toBe('light');
+		});
+
+		it('getTheme() and readStoredTheme() agree after every applyThemeLocally() call', () => {
+			applyThemeLocally('dark');
+			expect(getTheme()).toBe(readStoredTheme());
+			applyThemeLocally('system');
+			expect(getTheme()).toBe(readStoredTheme());
+		});
+	});
+
+	describe('handleStorageEvent() keeps the shared source correct across tabs (hearth-7w6)', () => {
+		// There's no real `window`/`StorageEvent` in this repo's plain-Node
+		// Vitest environment (see the file header), so this calls the exported
+		// handler directly with a duck-typed event -- exactly the shape the
+		// real `window.addEventListener('storage', handleStorageEvent)` wiring
+		// in theme.svelte.ts passes it.
+
+		it('refreshes current from localStorage when another tab changes the watched key', () => {
+			applyThemeLocally('system');
+			expect(getTheme()).toBe('system');
+
+			// Another tab wrote 'dark' directly to the (shared, per-origin)
+			// localStorage -- this tab's own `current` doesn't know yet until
+			// the storage event arrives.
+			storage.setItem('hearth.theme', 'dark');
+			handleStorageEvent({ key: 'hearth.theme' });
+			expect(getTheme()).toBe('dark');
+		});
+
+		it('ignores storage events for unrelated keys', () => {
+			applyThemeLocally('light');
+			storage.setItem('some.other.key', 'irrelevant');
+			handleStorageEvent({ key: 'some.other.key' });
+			expect(getTheme()).toBe('light');
+		});
+
+		it('treats a null key (localStorage.clear()) as "re-read everything", per the storage-event spec', () => {
+			applyThemeLocally('dark');
+			storage.removeItem('hearth.theme');
+			handleStorageEvent({ key: null });
+			expect(getTheme()).toBe('system');
+		});
 	});
 });
