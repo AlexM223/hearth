@@ -131,6 +131,8 @@ export {
 } from './psbt.js';
 export { broadcastDraft, type BroadcastNode, type BroadcastResult } from './broadcast.js';
 export { listDraftRows as listDrafts, getDraftRow as getDraft } from './repo.js';
+export { verifyTxInclusion, bitsToTarget, type SpvResult, type TxInclusionInput } from './spv.js';
+export { confirmDraft, type ConfirmNode } from './confirm.js';
 export {
 	selectCoins,
 	dustThreshold,

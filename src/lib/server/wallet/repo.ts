@@ -594,6 +594,16 @@ export function markBroadcast(walletId: number, draftId: number, txid: string, p
 		.run(txid, psbt, draftId, walletId);
 }
 
+/** Mark a broadcast draft confirmed (only after SPV verification, §5.5). */
+export function markConfirmed(walletId: number, draftId: number): void {
+	getDb()
+		.prepare(
+			`UPDATE psbt_drafts SET status = 'confirmed', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+			 WHERE id = ? AND wallet_id = ? AND status = 'broadcast'`
+		)
+		.run(draftId, walletId);
+}
+
 /** Mark a draft superseded (duplicate txid or RBF-replaced). */
 export function markSuperseded(walletId: number, draftId: number): void {
 	getDb()

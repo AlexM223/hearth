@@ -18,6 +18,7 @@ import {
 	type SelectionOutput
 } from './select.js';
 import { syncWallet, getUtxos, type SyncNode } from './sync.js';
+import { decodeAddress } from './address.js';
 import {
 	getWalletRow,
 	insertDraft,
@@ -170,6 +171,13 @@ async function constructPsbt(
 	}));
 	if (selection.changeAmountSats != null && changeIndex != null) {
 		const changeScript = engine.scriptFor(1, changeIndex);
+		// Heartwood gap fix (§6.1): validate the CHANGE address through the same
+		// recipient validator, and assert it encodes to the engine's scriptPubKey
+		// (a derived-address bug can't quietly send change to the wrong script).
+		const decodedChange = decodeAddress(changeScript.address, wallet.network);
+		if (hex.encode(decodedChange.scriptPubKey) !== hex.encode(changeScript.scriptPubKey)) {
+			throw new WalletError('internal error: change address did not match its script');
+		}
 		outputs.push({
 			address: changeScript.address,
 			scriptPubKey: changeScript.scriptPubKey,

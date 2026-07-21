@@ -264,6 +264,10 @@ export function importWallet(userId: number, input: ImportInput): Wallet {
 
 	if (input.descriptor) {
 		parsed = parseDescriptor(input.descriptor);
+		// A standard xpub carries mainnet version bytes but the same key can be
+		// watched on testnet/regtest (different address encoding only). Honor an
+		// explicit network override for the descriptor path too.
+		if (input.network) parsed = { ...parsed, network: input.network };
 	} else if (input.cosigners && input.cosigners.length > 1) {
 		// Explicit multisig via cosigner list.
 		const threshold = input.threshold;
