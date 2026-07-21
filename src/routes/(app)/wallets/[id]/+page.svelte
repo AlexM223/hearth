@@ -6,6 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { formatSats as fmtSats } from '$lib/format.js';
 	import SignStep from '$lib/components/sign/SignStep.svelte';
+	import Term from '$lib/components/Term.svelte';
 	import type { SigningProgress } from '$lib/shared/signing.js';
 	import { isValidAddressFormat } from '$lib/shared/address.js';
 	import { isValidSendAmount, MIN_SEND_SATS } from '$lib/shared/amount.js';
@@ -276,7 +277,12 @@
 				{#if amountTouched && amountError}<p class="field-hint err">{amountError}</p>{/if}
 			</label>
 			<label class="field">
-				<span class="t-label">Fee rate (sat/vB)</span>
+				<span class="t-label"
+					>Fee rate (<Term
+						label="sat/vB"
+						definition="Satoshis per virtual byte -- what you pay per unit of transaction size. Higher pays for faster confirmation when the network is busy; this node suggests a sane default."
+					/>)</span
+				>
 				<input class="input" bind:value={feeRate} inputmode="decimal" />
 			</label>
 

@@ -7,6 +7,7 @@
 	import { formatSats } from '$lib/format.js';
 	import DegradeBanner from '$lib/components/DegradeBanner.svelte';
 	import FeeChip from '$lib/components/FeeChip.svelte';
+	import Term from '$lib/components/Term.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -115,6 +116,13 @@
 						<li class="hairline row">
 							{#if vout.address}
 								<a class="t-mono addr" href={`/explorer/address/${vout.address}`}>{vout.address}</a>
+							{:else if vout.scriptType === 'nulldata'}
+								<span class="addr muted">
+									<Term
+										label="nulldata"
+										definition="A data-carrier output (OP_RETURN) -- it stores a small note on the chain, not spendable money. Common for timestamps, proofs, or protocol messages."
+									/>
+								</span>
 							{:else}
 								<span class="t-mono addr muted">{vout.scriptType}</span>
 							{/if}

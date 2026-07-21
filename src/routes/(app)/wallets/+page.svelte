@@ -3,6 +3,7 @@
 	// sig and multisig are one code path -- "kind" is just a badge here.
 	import { goto, invalidateAll } from '$app/navigation';
 	import { formatSats as fmtSats } from '$lib/format.js';
+	import Term from '$lib/components/Term.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -81,8 +82,16 @@
 				></textarea>
 			</label>
 			<p class="hint t-label">
-				Single-sig and multisig import the same way -- paste an xpub/ypub/zpub or a full output
-				descriptor. Keys stay yours; this node only watches.
+				Single-sig and multisig import the same way -- paste an
+				<Term
+					label="xpub/ypub/zpub"
+					definition="An extended PUBLIC key -- it lets this node watch your addresses and balance. It cannot spend anything; your private key never leaves your own device."
+				/>
+				or a full output
+				<Term
+					label="descriptor"
+					definition="A single string that fully describes a wallet's addresses (script type, keys, and derivation path) -- the modern, more precise alternative to a bare xpub."
+				/>. Keys stay yours; this node only watches.
 			</p>
 			{#if errorMsg}<p class="err t-label">{errorMsg}</p>{/if}
 			<button class="btn-primary" type="submit" disabled={busy}>
