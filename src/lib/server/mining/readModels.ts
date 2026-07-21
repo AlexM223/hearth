@@ -228,11 +228,15 @@ export async function getUserMiningView(userId: number): Promise<UserMiningView>
 	return {
 		engine: {
 			status: await engineDisplayStatus(),
-			stratumPort: settings.stratumPort,
+			// The connection card's Bitaxe-pointing instructions (MINING-ENGINE.md
+			// §6.4) must show the port a LAN miner actually dials -- on Umbrel
+			// that's the published HOST port (hearth-ny4.1: host 3343/3344, not
+			// the container-internal 3333/3334), never the internal bind port.
+			stratumPort: settings.advertisedStratumPort,
 			bind: settings.bind,
 			shareDifficulty: settings.shareDifficulty,
 			asicPort: settings.asicPortEnabled
-				? { port: settings.asicStratumPort, shareDifficulty: settings.asicShareDifficulty }
+				? { port: settings.advertisedAsicStratumPort, shareDifficulty: settings.asicShareDifficulty }
 				: null
 		},
 		connection,

@@ -28,6 +28,18 @@ export interface MiningSettings {
 	/** Resolved Stratum bind host: loopback -> 127.0.0.1; lan/all -> 0.0.0.0. */
 	bindHost: string;
 	stratumPort: number;
+	/**
+	 * The port a miner on the LAN actually dials (hearth-ny4.1): on Umbrel the
+	 * published HOST port differs from the container-internal listening port
+	 * (docker-compose.yml maps host 3343 -> container 3333, host 3344 ->
+	 * container 3334, to avoid colliding with cairn/Heartwood's own published
+	 * 3333/3334) -- the dashboard's connection instructions (MINING-ENGINE.md
+	 * §6.4) must show THIS number, never the internal `stratumPort`, or a
+	 * Bitaxe pointed at the internal port would simply fail to connect.
+	 * `HEARTH_MINING_STRATUM_EXTERNAL_PORT` is set only by the Umbrel compose;
+	 * unset (dev, bare-metal) falls back to `stratumPort` (no remap).
+	 */
+	advertisedStratumPort: number;
 	/** Vardiff floor + per-connection starting difficulty. */
 	shareDifficulty: number;
 	vardiffEnabled: boolean;
@@ -39,6 +51,8 @@ export interface MiningSettings {
 	asicPortEnabled: boolean;
 	/** Bind port for the ASIC listener (defaults 3334). */
 	asicStratumPort: number;
+	/** The LAN-facing port for the ASIC listener -- see {@link advertisedStratumPort}. */
+	advertisedAsicStratumPort: number;
 	/** Vardiff floor + starting difficulty for the ASIC listener (defaults 65536). */
 	asicShareDifficulty: number;
 	// --- SV2 seam (MINING-ENGINE.md §9.4): keys defined + read, no listener
@@ -98,6 +112,17 @@ function defaultBind(): MiningBind {
 	return detectPlatform() === 'umbrel' ? 'all' : DEFAULTS.bind;
 }
 
+/** The published LAN-facing port, from an env var the Umbrel compose sets
+ *  (see {@link MiningSettings.advertisedStratumPort}). Unset/invalid falls
+ *  back to the internal port -- a bare-metal/dev install has no host-port
+ *  remap, so the two are the same number there. */
+function envPort(envVar: string, internalPort: number): number {
+	const raw = process.env[envVar];
+	if (!raw) return internalPort;
+	const n = parseInt(raw, 10);
+	return Number.isInteger(n) && n > 0 ? n : internalPort;
+}
+
 function boolSetting(key: string, dflt: boolean): boolean {
 	const v = getMeta(key);
 	if (v === null) return dflt;
@@ -136,17 +161,21 @@ export function readMiningSettings(): MiningSettings {
 	const bindRaw = getMeta('mining_bind');
 	const bind: MiningBind =
 		bindRaw === 'lan' || bindRaw === 'all' || bindRaw === 'loopback' ? bindRaw : defaultBind();
+	const stratumPort = intSetting('mining_stratum_port', DEFAULTS.stratumPort);
+	const asicStratumPort = intSetting('mining_asic_stratum_port', DEFAULTS.asicStratumPort);
 	return {
 		enabled: boolSetting('mining_enabled', DEFAULTS.enabled),
 		bind,
 		bindHost: bindHostFor(bind),
-		stratumPort: intSetting('mining_stratum_port', DEFAULTS.stratumPort),
+		stratumPort,
+		advertisedStratumPort: envPort('HEARTH_MINING_STRATUM_EXTERNAL_PORT', stratumPort),
 		shareDifficulty: floatSetting('mining_share_difficulty', DEFAULTS.shareDifficulty),
 		vardiffEnabled: boolSetting('mining_vardiff_enabled', DEFAULTS.vardiffEnabled),
 		vardiffTargetPerMin: intSetting('mining_vardiff_target_rate', DEFAULTS.vardiffTargetPerMin),
 		poolTag: getMeta('mining_pool_tag') || DEFAULTS.poolTag,
 		asicPortEnabled: boolSetting('mining_asic_port_enabled', DEFAULTS.asicPortEnabled),
-		asicStratumPort: intSetting('mining_asic_stratum_port', DEFAULTS.asicStratumPort),
+		asicStratumPort,
+		advertisedAsicStratumPort: envPort('HEARTH_MINING_ASIC_EXTERNAL_PORT', asicStratumPort),
 		asicShareDifficulty: floatSetting('mining_asic_share_difficulty', DEFAULTS.asicShareDifficulty),
 		sv2Enabled: boolSetting('mining_sv2_enabled', DEFAULTS.sv2Enabled),
 		sv2Port: intSetting('mining_sv2_port', DEFAULTS.sv2Port),

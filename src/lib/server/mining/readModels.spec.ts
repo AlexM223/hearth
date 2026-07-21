@@ -4,7 +4,7 @@
  * regression test -- plus sanity checks on the totals/odds/wallets shape and
  * that getPublicPoolView never exposes owner-only settings.
  */
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb, closeDb, getDb } from '../db/index.js';
 import { runMigrations } from '../db/migrations.js';
@@ -37,6 +37,21 @@ beforeEach(() => {
 	userA = rows[0]!.id;
 	userB = rows[1]!.id;
 	__resetMiningEngineForTests();
+});
+
+describe('readModels/getUserMiningView: connection card uses the ADVERTISED port (hearth-ny4.1)', () => {
+	afterEach(() => {
+		delete process.env.HEARTH_MINING_STRATUM_EXTERNAL_PORT;
+		delete process.env.HEARTH_MINING_ASIC_EXTERNAL_PORT;
+	});
+
+	it("shows the Umbrel-published host port, not the container-internal bind port, so a Bitaxe pointed at it actually connects", async () => {
+		process.env.HEARTH_MINING_STRATUM_EXTERNAL_PORT = '3343';
+		process.env.HEARTH_MINING_ASIC_EXTERNAL_PORT = '3344';
+		const view = await getUserMiningView(userA);
+		expect(view.engine.stratumPort).toBe(3343);
+		expect(view.engine.asicPort?.port).toBe(3344);
+	});
 });
 
 describe('readModels/getUserMiningView: strict per-user scoping', () => {

@@ -3,7 +3,7 @@
  * keys fall back to defaults, an explicit stored value always wins, and a
  * malformed stored value falls back rather than propagating NaN.
  */
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb, closeDb } from '../db/index.js';
 import { runMigrations } from '../db/migrations.js';
@@ -74,5 +74,37 @@ describe('mining/settings: readMiningSettings', () => {
 		expect(readMiningSettings().enabled).toBe(false);
 		writeMiningSetting('mining_enabled', true);
 		expect(readMiningSettings().enabled).toBe(true);
+	});
+});
+
+describe('mining/settings: advertised (host-published) ports vs internal bind ports (hearth-ny4.1)', () => {
+	const STRATUM_ENV = 'HEARTH_MINING_STRATUM_EXTERNAL_PORT';
+	const ASIC_ENV = 'HEARTH_MINING_ASIC_EXTERNAL_PORT';
+
+	afterEach(() => {
+		delete process.env[STRATUM_ENV];
+		delete process.env[ASIC_ENV];
+	});
+
+	it('defaults to the internal port when no external-port env var is set (bare-metal/dev has no host remap)', () => {
+		const s = readMiningSettings();
+		expect(s.advertisedStratumPort).toBe(s.stratumPort);
+		expect(s.advertisedAsicStratumPort).toBe(s.asicStratumPort);
+	});
+
+	it('uses the env-supplied external port when set (the Umbrel compose host-port remap, e.g. 3343/3344)', () => {
+		process.env[STRATUM_ENV] = '3343';
+		process.env[ASIC_ENV] = '3344';
+		const s = readMiningSettings();
+		expect(s.advertisedStratumPort).toBe(3343);
+		expect(s.advertisedAsicStratumPort).toBe(3344);
+		// The internal bind port is UNCHANGED by the external-port env var.
+		expect(s.stratumPort).toBe(3333);
+		expect(s.asicStratumPort).toBe(3334);
+	});
+
+	it('falls back to the internal port on a malformed external-port env var', () => {
+		process.env[STRATUM_ENV] = 'not-a-number';
+		expect(readMiningSettings().advertisedStratumPort).toBe(readMiningSettings().stratumPort);
 	});
 });
