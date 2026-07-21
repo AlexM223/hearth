@@ -1,9 +1,10 @@
 <script lang="ts">
 	// Sign with device (Ledger WebHID / Trezor popup) -- SIGNING.md §2.2.1.
-	// Per-device secure-context routing (T3) plus the actual Ledger flow (T4);
-	// Trezor's real flow lands at T5. BROWSER-SIDE component -- never imports
-	// $lib/server (SIGNING.md §0.3). All device libraries are lazy-imported
-	// inside ledger.ts itself, never touched until a device tile is chosen.
+	// Per-device secure-context routing (T3), the Ledger flow (T4), and the
+	// Trezor flow (T5). BROWSER-SIDE component -- never imports $lib/server
+	// (SIGNING.md §0.3). All device libraries are lazy-imported inside
+	// ledger.ts/trezor.ts themselves, never touched until a device tile is
+	// chosen.
 	import { needsSecureContext, secureOrigin } from '$lib/hw/secureContext.js';
 	import type { SigningWalletContext } from '$lib/shared/signing.js';
 	import SecureContextNudge from './SecureContextNudge.svelte';
@@ -28,7 +29,8 @@
 	let device = $state<DeviceTile | null>(null);
 
 	// Trezor's popup holds its own secure-context transport (works on plain
-	// HTTP); Ledger's WebHID needs the page itself to be a secure context.
+	// HTTP, including Umbrel's :3252 origin with no hop); Ledger's WebHID
+	// needs the page itself to be a secure context.
 	const ledgerNeedsHop = $derived(needsSecureContext('ledger') && !secureOrigin());
 
 	type Phase = 'idle' | 'connect' | 'device-approval' | 'registering' | 'signed' | 'error';
@@ -40,6 +42,15 @@
 	function multisigKeys() {
 		return wallet.keys.map((k) => ({ xpub: k.xpub, fingerprint: k.fingerprint, path: k.path }));
 	}
+
+	function resetPhase() {
+		phase = 'connect';
+		message = null;
+		wrongDevice = false;
+		timedOut = false;
+	}
+
+	// ---- Ledger -----------------------------------------------------------
 
 	async function fetchRegistrations(): Promise<{ masterFp: string; policyHmac: string }[]> {
 		try {
@@ -66,10 +77,7 @@
 	}
 
 	async function signWithLedger() {
-		phase = 'connect';
-		message = null;
-		wrongDevice = false;
-		timedOut = false;
+		resetPhase();
 		try {
 			const { signPsbtWithLedger, signMultisigPsbtWithLedger, registerMultisigPolicy, LedgerError } = await import(
 				'$lib/hw/ledger.js'
@@ -121,17 +129,41 @@
 			phase = 'signed';
 			onsigned(signed);
 		} catch (err) {
-			phase = 'error';
 			const { LedgerError } = await import('$lib/hw/ledger.js');
-			if (err instanceof LedgerError) {
-				message = err.message;
-				wrongDevice = err.code === 'wrong_device';
-				timedOut = err.code === 'timeout';
-			} else {
-				message = err instanceof Error ? err.message : 'Something went wrong signing with the Ledger.';
-			}
-			onerror(message ?? 'Something went wrong signing with the Ledger.');
+			failPhase(err, err instanceof LedgerError ? err.code : undefined, 'Something went wrong signing with the Ledger.');
 		}
+	}
+
+	// ---- Trezor -------------------------------------------------------------
+
+	async function signWithTrezor() {
+		resetPhase();
+		phase = 'device-approval'; // Trezor's popup IS the "connect" UI; no separate wait state
+		try {
+			const { signPsbtWithTrezor, signMultisigPsbtWithTrezor } = await import('$lib/hw/trezor.js');
+			const signed =
+				wallet.kind === 'single'
+					? await signPsbtWithTrezor(psbt)
+					: await signMultisigPsbtWithTrezor(psbt, multisigKeys(), wallet.threshold);
+			phase = 'signed';
+			onsigned(signed);
+		} catch (err) {
+			const { TrezorError } = await import('$lib/hw/trezor.js');
+			failPhase(err, err instanceof TrezorError ? err.code : undefined, 'Something went wrong signing with the Trezor.');
+		}
+	}
+
+	function failPhase(err: unknown, code: string | undefined, fallback: string): void {
+		phase = 'error';
+		message = err instanceof Error ? err.message : fallback;
+		wrongDevice = code === 'wrong_device';
+		timedOut = code === 'timeout';
+		onerror(message ?? fallback);
+	}
+
+	function retry() {
+		if (device === 'ledger') void signWithLedger();
+		else void signWithTrezor();
 	}
 </script>
 
@@ -142,32 +174,30 @@
 	</div>
 {:else if device === 'ledger' && ledgerNeedsHop}
 	<SecureContextNudge what="Ledger" {httpsExternalPort} />
-{:else if device === 'ledger'}
-	<div class="ledger-flow">
+{:else}
+	<div class="device-flow">
 		{#if phase === 'idle'}
-			<button class="btn-primary secondary" type="button" onclick={signWithLedger}>Connect your Ledger</button>
+			<button class="btn-primary secondary" type="button" onclick={() => (device === 'ledger' ? signWithLedger() : signWithTrezor())}>
+				{device === 'ledger' ? 'Connect your Ledger' : 'Sign with Trezor'}
+			</button>
 		{:else if phase === 'connect'}
 			<p class="t-label muted">Plug in and unlock your Ledger, open the Bitcoin app…</p>
 		{:else if phase === 'registering'}
 			<p class="t-label muted">Registering this wallet with your Ledger -- check its screen…</p>
 		{:else if phase === 'device-approval'}
-			<p class="t-label muted">Check the amounts on your Ledger and approve.</p>
+			<p class="t-label muted">
+				{device === 'ledger' ? 'Check the amounts on your Ledger and approve.' : 'Check the amounts in the Trezor popup and approve on your device.'}
+			</p>
 		{:else if phase === 'signed'}
 			<p class="t-label ok">Signed.</p>
 		{:else}
 			<p class="t-label err">{message}</p>
-			{#if timedOut}
-				<button class="btn-primary secondary" type="button" onclick={signWithLedger}>Try again</button>
-			{:else if wrongDevice}
-				<p class="t-label muted">Connect the right Ledger for this wallet, then try again.</p>
-				<button class="btn-primary secondary" type="button" onclick={signWithLedger}>Try again</button>
-			{:else}
-				<button class="btn-primary secondary" type="button" onclick={signWithLedger}>Try again</button>
+			{#if wrongDevice}
+				<p class="t-label muted">Connect the right {device === 'ledger' ? 'Ledger' : 'Trezor'} for this wallet, then try again.</p>
 			{/if}
+			<button class="btn-primary secondary" type="button" onclick={retry}>Try again</button>
 		{/if}
 	</div>
-{:else}
-	<p class="t-label muted">Trezor signing lands in a later step.</p>
 {/if}
 
 <style>
@@ -184,7 +214,7 @@
 		color: var(--text);
 		font-family: var(--font-ui);
 	}
-	.ledger-flow {
+	.device-flow {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
