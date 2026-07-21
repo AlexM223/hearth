@@ -24,13 +24,14 @@ description: >-
   tick.
 
 
-  Signing itself happens right in the browser: plug in a Ledger or Trezor,
-  or go air-gapped with a signed-transaction file or an animated QR code --
-  whichever signer you already trust. A couple of ports beyond the usual
-  Umbrel app page are worth knowing about before you install. Hearth also
-  publishes a self-signed HTTPS listener on port 4489, which is what gives
-  the browser the secure connection that Ledger and camera QR-scanning
-  need (Trezor's popup and file-based signing work over the app's usual
+  Signing itself happens right in the browser: plug in a Ledger, Trezor, or
+  BitBox02, or go air-gapped with a signed-transaction file or an animated
+  QR code -- whichever signer you already trust. A couple of ports beyond
+  the usual Umbrel app page are worth knowing about before you install.
+  Hearth also publishes a self-signed HTTPS listener on port 4489, which is
+  what gives the browser the secure connection that Ledger and camera
+  QR-scanning need (Trezor's popup, a BitBox02 reached through the
+  BitBoxBridge app, and file-based signing all work over the app's usual
   address, no extra step); your browser will ask you to accept its
   certificate the first time it sends you there, and that's expected. If
   you turn on the solo mining pool (off by default), your miner (e.g. a

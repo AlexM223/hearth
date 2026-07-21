@@ -56,7 +56,7 @@ describe('T0: signing-surface boundary -- src/lib/hw/** never imports $lib/serve
 	it('at least the driver files actually exist (a passing empty-glob would be a false green)', () => {
 		const files = listSourceFiles(HW_DIR);
 		const names = files.map((f) => f.split(/[/\\]/).pop());
-		for (const expected of ['common.ts', 'secureContext.ts', 'psbtFile.ts', 'bbqr.ts', 'qrScan.ts', 'ledger.ts', 'trezor.ts']) {
+		for (const expected of ['common.ts', 'secureContext.ts', 'psbtFile.ts', 'bbqr.ts', 'qrScan.ts', 'ledger.ts', 'trezor.ts', 'bitbox02.ts']) {
 			expect(names).toContain(expected);
 		}
 	});

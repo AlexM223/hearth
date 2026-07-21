@@ -109,7 +109,7 @@
 		<div class="tiles">
 			<button class="tile" type="button" onclick={() => (method = 'device')} disabled={busy}>
 				<span class="t-label">Sign with device</span>
-				<span class="t-label muted">Ledger, Trezor</span>
+				<span class="t-label muted">Ledger, Trezor, BitBox02</span>
 			</button>
 			<button class="tile" type="button" onclick={() => (method = 'file')} disabled={busy}>
 				<span class="t-label">Sign with file</span>

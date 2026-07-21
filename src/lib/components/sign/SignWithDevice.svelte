@@ -25,19 +25,25 @@
 		wallet: SigningWalletContext;
 	} = $props();
 
-	type DeviceTile = 'ledger' | 'trezor';
+	type DeviceTile = 'ledger' | 'trezor' | 'bitbox02';
 	let device = $state<DeviceTile | null>(null);
 
 	// Trezor's popup holds its own secure-context transport (works on plain
 	// HTTP, including Umbrel's :3252 origin with no hop); Ledger's WebHID
-	// needs the page itself to be a secure context.
+	// needs the page itself to be a secure context. BitBox02 falls back to
+	// the BitBoxBridge service when WebHID is absent (secureContext.ts's
+	// needsSecureContext deliberately excludes it from the hop gate).
 	const ledgerNeedsHop = $derived(needsSecureContext('ledger') && !secureOrigin());
 
-	type Phase = 'idle' | 'connect' | 'device-approval' | 'registering' | 'signed' | 'error';
+	type Phase = 'idle' | 'connect' | 'pairing' | 'device-approval' | 'registering' | 'signed' | 'error';
 	let phase = $state<Phase>('idle');
 	let message = $state<string | null>(null);
 	let wrongDevice = $state(false);
 	let timedOut = $state(false);
+	// First-connection Noise pairing code (BitBox02 only) -- shown while the
+	// user confirms it on-device; bitbox-api persists the pinned key in
+	// localStorage itself, so this callback fires at most once per browser.
+	let pairingCode = $state<string | null>(null);
 
 	function multisigKeys() {
 		return wallet.keys.map((k) => ({ xpub: k.xpub, fingerprint: k.fingerprint, path: k.path }));
@@ -48,6 +54,7 @@
 		message = null;
 		wrongDevice = false;
 		timedOut = false;
+		pairingCode = null;
 	}
 
 	// ---- Ledger -----------------------------------------------------------
@@ -153,6 +160,36 @@
 		}
 	}
 
+	// ---- BitBox02 -----------------------------------------------------------
+
+	async function signWithBitbox02() {
+		resetPhase();
+		try {
+			const { signPsbtWithBitbox02, signMultisigPsbtWithBitbox02 } = await import('$lib/hw/bitbox02.js');
+			const onPairingCode = (code: string) => {
+				pairingCode = code;
+				phase = 'pairing';
+			};
+			if (wallet.kind === 'single') {
+				phase = 'connect';
+				const signed = await signPsbtWithBitbox02(psbt, onPairingCode);
+				phase = 'signed';
+				onsigned(signed);
+				return;
+			}
+			const scriptType = wallet.scriptType as 'p2sh' | 'p2sh-p2wsh' | 'p2wsh';
+			const keys = multisigKeys();
+			const name = `Hearth ${wallet.threshold}-of-${keys.length}`;
+			phase = 'connect';
+			const signed = await signMultisigPsbtWithBitbox02(psbt, keys, wallet.threshold, scriptType, name, onPairingCode);
+			phase = 'signed';
+			onsigned(signed);
+		} catch (err) {
+			const { Bitbox02Error } = await import('$lib/hw/bitbox02.js');
+			failPhase(err, err instanceof Bitbox02Error ? err.code : undefined, 'Something went wrong signing with the BitBox02.');
+		}
+	}
+
 	function failPhase(err: unknown, code: string | undefined, fallback: string): void {
 		phase = 'error';
 		message = err instanceof Error ? err.message : fallback;
@@ -163,7 +200,8 @@
 
 	function retry() {
 		if (device === 'ledger') void signWithLedger();
-		else void signWithTrezor();
+		else if (device === 'trezor') void signWithTrezor();
+		else void signWithBitbox02();
 	}
 </script>
 
@@ -171,29 +209,49 @@
 	<div class="device-tiles">
 		<button class="device-tile t-label" type="button" onclick={() => (device = 'ledger')}>Ledger</button>
 		<button class="device-tile t-label" type="button" onclick={() => (device = 'trezor')}>Trezor</button>
+		<button class="device-tile t-label" type="button" onclick={() => (device = 'bitbox02')}>BitBox02</button>
 	</div>
 {:else if device === 'ledger' && ledgerNeedsHop}
 	<SecureContextNudge what="Ledger" {httpsExternalPort} />
 {:else}
 	<div class="device-flow">
 		{#if phase === 'idle'}
-			<button class="btn-primary secondary" type="button" onclick={() => (device === 'ledger' ? signWithLedger() : signWithTrezor())}>
-				{device === 'ledger' ? 'Connect your Ledger' : 'Sign with Trezor'}
+			<button
+				class="btn-primary secondary"
+				type="button"
+				onclick={() => (device === 'ledger' ? signWithLedger() : device === 'trezor' ? signWithTrezor() : signWithBitbox02())}
+			>
+				{device === 'ledger' ? 'Connect your Ledger' : device === 'trezor' ? 'Sign with Trezor' : 'Connect your BitBox02'}
 			</button>
 		{:else if phase === 'connect'}
-			<p class="t-label muted">Plug in and unlock your Ledger, open the Bitcoin app…</p>
+			<p class="t-label muted">
+				{device === 'ledger'
+					? 'Plug in and unlock your Ledger, open the Bitcoin app…'
+					: device === 'trezor'
+						? 'Connecting…'
+						: 'Plug in and unlock your BitBox02 (or approve it in the BitBoxBridge app)…'}
+			</p>
+		{:else if phase === 'pairing'}
+			<p class="t-label muted">First time connecting this BitBox02 here? Confirm this code on the device:</p>
+			<p class="t-label mono">{pairingCode}</p>
 		{:else if phase === 'registering'}
 			<p class="t-label muted">Registering this wallet with your Ledger -- check its screen…</p>
 		{:else if phase === 'device-approval'}
 			<p class="t-label muted">
-				{device === 'ledger' ? 'Check the amounts on your Ledger and approve.' : 'Check the amounts in the Trezor popup and approve on your device.'}
+				{device === 'ledger'
+					? 'Check the amounts on your Ledger and approve.'
+					: device === 'trezor'
+						? 'Check the amounts in the Trezor popup and approve on your device.'
+						: 'Check the amounts on your BitBox02 and approve.'}
 			</p>
 		{:else if phase === 'signed'}
 			<p class="t-label ok">Signed.</p>
 		{:else}
 			<p class="t-label err">{message}</p>
 			{#if wrongDevice}
-				<p class="t-label muted">Connect the right {device === 'ledger' ? 'Ledger' : 'Trezor'} for this wallet, then try again.</p>
+				<p class="t-label muted">
+					Connect the right {device === 'ledger' ? 'Ledger' : device === 'trezor' ? 'Trezor' : 'BitBox02'} for this wallet, then try again.
+				</p>
 			{/if}
 			<button class="btn-primary secondary" type="button" onclick={retry}>Try again</button>
 		{/if}
@@ -228,5 +286,11 @@
 	}
 	.err {
 		color: var(--error);
+	}
+	.mono {
+		font-family: var(--font-mono);
+		font-size: 18px;
+		letter-spacing: 0.04em;
+		color: var(--text);
 	}
 </style>

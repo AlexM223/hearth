@@ -1,14 +1,15 @@
 /**
- * T0's devDependency-placement guard (SIGNING.md §0.4, §5.1). The signing
- * surface's Stage-1 transport libraries MUST be `devDependencies`, never
- * `dependencies` -- they're present when `vite build` runs (which installs
+ * T0/T7's devDependency-placement guard (SIGNING.md §0.4, §5.1). Every
+ * signing-surface transport library MUST be a `devDependency`, never a
+ * `dependency` -- they're present when `vite build` runs (which installs
  * devDeps) and tree-shaken into client bundles, but absent from the runtime
  * `node_modules`. This is what keeps `@trezor/connect-web`'s transitive
- * native `usb` addon out of the production closure while still shipping.
+ * native `usb` addon (and, now, bitbox-api's WASM) out of the production
+ * closure while still shipping.
  *
- * Stage 2/3 libs (bitbox-api, jadets) are filed as future work
- * (hearth-mhp/hearth-ui7), not installed -- only the Stage-1 six are
- * asserted here.
+ * Stage 3 (jadets) is filed as future work (hearth-ui7), not installed --
+ * only Stage 1 + Stage 2 (bitbox-api, landed with hearth-mhp) are asserted
+ * here.
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -26,6 +27,11 @@ const STAGE1_TRANSPORT_LIBS = [
 	'@trezor/connect-web',
 	'bbqr'
 ];
+
+// Stage 2 (hearth-mhp): bitbox-api itself, plus the build plugins its WASM
+// glue needs (vite-plugin-wasm). Both must stay devDependencies -- present
+// for `vite build`'s client bundle, absent from the runtime image.
+const STAGE2_TRANSPORT_LIBS = ['bitbox-api', 'vite-plugin-wasm'];
 
 describe('T0: Stage-1 transport libs are devDependencies, never dependencies', () => {
 	const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -51,5 +57,29 @@ describe('T0: Stage-1 transport libs are devDependencies, never dependencies', (
 		// rather than a false failure/false green.
 		const { scanned, hits } = scanBuiltServerBundle();
 		if (scanned) expect(hits).toEqual([]);
+	});
+});
+
+describe('T7: Stage-2 (BitBox02) libs are devDependencies, never dependencies', () => {
+	const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+
+	for (const lib of STAGE2_TRANSPORT_LIBS) {
+		it(`${lib} is a devDependency`, () => {
+			expect(pkg.devDependencies?.[lib]).toBeTruthy();
+		});
+		it(`${lib} is NOT a production dependency`, () => {
+			expect(pkg.dependencies?.[lib]).toBeUndefined();
+		});
+	}
+
+	it('bitbox-api (a browser-only WASM package) stays out of the production closure', () => {
+		const { nativeHits } = scanProductionClosure();
+		// Not a "native .node" hit by definition (it's WASM, not a compiled
+		// addon), but the closure walk only starts from `dependencies` at all --
+		// this assertion is really about STAGE2_TRANSPORT_LIBS above (devDep,
+		// not dep), re-confirmed here alongside the Stage-1 native-closure check
+		// so a future change can't quietly move bitbox-api into `dependencies`
+		// without this suite noticing via the two assertions above.
+		expect(nativeHits).toEqual([]);
 	});
 });
