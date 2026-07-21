@@ -12,7 +12,7 @@ import { openDb, closeDb } from '$lib/server/db/index.js';
 import { runMigrations } from '$lib/server/db/migrations.js';
 import { importWallet, buildPsbt, deriveAddresses, type BuildNode } from '$lib/server/wallet/index.js';
 import type { Wallet } from '$lib/server/wallet/index.js';
-import { encodePsbtToFrames, PsbtQrJoiner } from './bbqr.js';
+import { encodePsbtToFrames, PsbtQrJoiner, looksLikeBbqrFrame } from './bbqr.js';
 
 const RECIP = 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu';
 
@@ -110,6 +110,14 @@ describe('bbqr.ts: encodePsbtToFrames + PsbtQrJoiner round-trip', () => {
 		const joiner = new PsbtQrJoiner();
 		joiner.add(framesA[0]);
 		expect(() => joiner.add(framesB[0])).toThrow(/two different transactions/i);
+	});
+
+	it('looksLikeBbqrFrame distinguishes BBQr frames from BC-UR / plain text (T8, hearth-ui7)', async () => {
+		const psbt = await realUnsignedPsbt();
+		const [frame] = encodePsbtToFrames(psbt);
+		expect(looksLikeBbqrFrame(frame)).toBe(true);
+		expect(looksLikeBbqrFrame('ur:crypto-psbt/lpaaaacf')).toBe(false);
+		expect(looksLikeBbqrFrame(psbt)).toBe(false);
 	});
 
 	it('reset() clears state for a fresh scan', async () => {

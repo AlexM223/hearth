@@ -1,12 +1,15 @@
 <script lang="ts">
-	// Sign with QR (SIGNING.md §2.2.3) -- animated BBQr display + camera
-	// scan-back. Show always works (any browser/context, display only);
-	// Scan needs a secure context + Chromium's BarcodeDetector -- on plain
-	// HTTP or an unsupported browser it falls back to a paste box rather than
-	// erroring. BROWSER-SIDE component -- never imports $lib/server
-	// (SIGNING.md §0.3).
+	// Sign with QR (SIGNING.md §2.2.3) -- animated QR display + camera
+	// scan-back, in either of two codecs: BBQr (SeedSigner, Passport,
+	// Coldcard-Q, Jade-BBQr-mode) or BC-UR (Keystone, Jade-QR mode --
+	// SIGNING.md §1.7, hearth-ui7 T8). Show always works (any browser/context,
+	// display only); Scan needs a secure context + Chromium's BarcodeDetector
+	// -- on plain HTTP or an unsupported browser it falls back to a paste box
+	// rather than erroring. BROWSER-SIDE component -- never imports
+	// $lib/server (SIGNING.md §0.3).
 	import { onDestroy } from 'svelte';
-	import { encodePsbtToFramesDetailed, PsbtQrJoiner } from '$lib/hw/bbqr.js';
+	import { encodePsbtToFramesDetailed, PsbtQrJoiner as BbqrJoiner, looksLikeBbqrFrame } from '$lib/hw/bbqr.js';
+	import { encodePsbtToFrames as encodeUrFrames, PsbtQrJoiner as UrJoiner, looksLikeUrFrame } from '$lib/hw/jadeUr.js';
 	import { startScan, type ScanHandle } from '$lib/hw/qrScan.js';
 	import { cameraScanUnavailableReason } from '$lib/hw/secureContext.js';
 	import SecureContextNudge from './SecureContextNudge.svelte';
@@ -26,39 +29,100 @@
 	type Half = 'show' | 'scan';
 	let half = $state<Half>('show');
 
-	// ---- Show half: an animated APNG built once from the current PSBT.
+	// The "Show" codec choice -- BBQr (Stage 1) or BC-UR (Stage 3, Keystone /
+	// Jade-QR). Scan-back doesn't need this: it auto-detects whichever codec
+	// the first scanned frame looks like (see QrJoinerLike below).
+	type ShowCodec = 'bbqr' | 'bcur';
+	let showCodec = $state<ShowCodec>('bbqr');
+
+	// ---- Show half: an animated image built once from the current PSBT --
+	// BBQr renders as a single animated APNG (bbqr's own renderer); BC-UR has
+	// no such renderer of its own, so it's a set of plain QR PNGs (via the
+	// `qrcode` package) cycled on the same ~300ms cadence as bbqr's frames.
 	let showImgUrl = $state<string | null>(null);
 	let showObjectUrl: string | null = null;
+	let urCycleTimer: ReturnType<typeof setInterval> | null = null;
+
+	function stopUrCycle() {
+		if (urCycleTimer !== null) {
+			clearInterval(urCycleTimer);
+			urCycleTimer = null;
+		}
+	}
 
 	function buildShowImage() {
+		stopUrCycle();
 		if (showObjectUrl) {
 			URL.revokeObjectURL(showObjectUrl);
 			showObjectUrl = null;
 		}
-		try {
-			const { parts, version } = encodePsbtToFramesDetailed(psbt, { minSplit: 1 });
-			// Lazy-import: rendering is the only piece of `bbqr` that touches a
-			// browser canvas -- keep it out of any SSR/non-QR-user code path.
-			import('bbqr').then(({ renderQRImage }) => {
-				renderQRImage(parts, version, { mode: 'animated', frameDelay: 300 }).then((buf) => {
-					const blob = new Blob([buf], { type: 'image/png' });
-					showObjectUrl = URL.createObjectURL(blob);
-					showImgUrl = showObjectUrl;
+		showImgUrl = null;
+		if (showCodec === 'bbqr') {
+			try {
+				const { parts, version } = encodePsbtToFramesDetailed(psbt, { minSplit: 1 });
+				// Lazy-import: rendering is the only piece of `bbqr` that touches a
+				// browser canvas -- keep it out of any SSR/non-QR-user code path.
+				import('bbqr').then(({ renderQRImage }) => {
+					renderQRImage(parts, version, { mode: 'animated', frameDelay: 300 }).then((buf) => {
+						const blob = new Blob([buf], { type: 'image/png' });
+						showObjectUrl = URL.createObjectURL(blob);
+						showImgUrl = showObjectUrl;
+					});
 				});
+			} catch {
+				onerror('Could not build the QR code for this transaction.');
+			}
+			return;
+		}
+
+		// BC-UR: render each `ur:crypto-psbt/...` frame as its own QR PNG (data
+		// URL -- no Blob/object-URL lifetime to manage) and cycle through them.
+		try {
+			const frames = encodeUrFrames(psbt);
+			import('qrcode').then(async (QRCode) => {
+				const urls = await Promise.all(frames.map((f) => QRCode.toDataURL(f, { margin: 1, width: 300 })));
+				if (urls.length === 0) return;
+				showImgUrl = urls[0];
+				if (urls.length > 1) {
+					let i = 0;
+					urCycleTimer = setInterval(() => {
+						i = (i + 1) % urls.length;
+						showImgUrl = urls[i];
+					}, 300);
+				}
 			});
 		} catch {
 			onerror('Could not build the QR code for this transaction.');
 		}
 	}
 
+	function chooseShowCodec(next: ShowCodec) {
+		showCodec = next;
+		buildShowImage();
+	}
+
 	$effect(() => {
 		if (half === 'show') buildShowImage();
 	});
 
-	// ---- Scan half: camera BarcodeDetector, or a paste fallback.
+	// ---- Scan half: camera BarcodeDetector, or a paste fallback. The codec
+	// is auto-detected from the first scanned frame -- both joiners share the
+	// same add/progress/result shape, so the caller doesn't need to know
+	// which one it ended up with.
+	interface QrJoinerLike {
+		add(frame: string): { complete: boolean; progress: { have: number; total: number } };
+		progress(): { have: number; total: number };
+		result(): string;
+		reset(): void;
+	}
+
+	function pickJoiner(frame: string): QrJoinerLike {
+		return looksLikeUrFrame(frame) ? new UrJoiner() : new BbqrJoiner();
+	}
+
 	let video = $state<HTMLVideoElement | undefined>(undefined);
 	let scanHandle: ScanHandle | null = null;
-	let joiner = new PsbtQrJoiner();
+	let joiner: QrJoinerLike | null = null;
 	let scanProgress = $state<{ have: number; total: number } | null>(null);
 	let pasteText = $state('');
 
@@ -71,7 +135,7 @@
 
 	async function beginScan() {
 		if (!video || unavailableReason !== 'ok') return;
-		joiner = new PsbtQrJoiner();
+		joiner = null;
 		scanProgress = null;
 		try {
 			scanHandle = await startScan(video, onFrame);
@@ -82,6 +146,7 @@
 
 	function onFrame(text: string) {
 		try {
+			if (!joiner) joiner = pickJoiner(text);
 			const { complete, progress } = joiner.add(text);
 			scanProgress = progress;
 			if (complete) {
@@ -90,7 +155,10 @@
 			}
 		} catch (err) {
 			onerror(err instanceof Error ? err.message : "That's not a signed-transaction QR.");
-			joiner.reset();
+			// Drop the joiner entirely, not just reset it -- a bad frame might
+			// belong to a different codec than the one auto-detected so far, so
+			// the next frame should get a fresh pickJoiner() chance too.
+			joiner = null;
 			scanProgress = null;
 		}
 	}
@@ -109,6 +177,7 @@
 
 	onDestroy(() => {
 		stopScan();
+		stopUrCycle();
 		if (showObjectUrl) URL.revokeObjectURL(showObjectUrl);
 	});
 </script>
@@ -124,6 +193,14 @@
 	</div>
 
 	{#if half === 'show'}
+		<div class="codecs">
+			<button class="codec-btn t-label" type="button" class:active={showCodec === 'bbqr'} onclick={() => chooseShowCodec('bbqr')}>
+				BBQr
+			</button>
+			<button class="codec-btn t-label" type="button" class:active={showCodec === 'bcur'} onclick={() => chooseShowCodec('bcur')}>
+				BC-UR (Keystone, Jade)
+			</button>
+		</div>
 		<p class="t-label muted">Scan this with your signer.</p>
 		{#if showImgUrl}
 			<img class="qr-img" src={showImgUrl} alt="Animated QR code of the transaction to sign" />
@@ -165,11 +242,13 @@
 		flex-direction: column;
 		gap: var(--space-2);
 	}
-	.halves {
+	.halves,
+	.codecs {
 		display: flex;
 		gap: var(--space-2);
 	}
-	.half-btn {
+	.half-btn,
+	.codec-btn {
 		background: var(--surface-elevated);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-pill);
@@ -178,7 +257,12 @@
 		color: var(--text-secondary);
 		font-family: var(--font-ui);
 	}
-	.half-btn.active {
+	.codec-btn {
+		padding: 4px 10px;
+		font-size: var(--t-micro, 0.75rem);
+	}
+	.half-btn.active,
+	.codec-btn.active {
 		color: var(--accent);
 		border-color: var(--accent-dim);
 	}

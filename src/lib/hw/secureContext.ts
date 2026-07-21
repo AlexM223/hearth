@@ -20,7 +20,11 @@ export function isWebHidAvailable(): boolean {
 	return typeof navigator !== 'undefined' && Boolean((navigator as { hid?: unknown }).hid);
 }
 
-/** Web Serial (Jade, Stage 3) -- Chromium desktop only, needs a secure context. */
+/** Web Serial (live Jade signing, Stage 3) -- Chromium desktop only, needs a
+ *  secure context. No driver in `src/lib/hw` uses this today: hearth-ui7
+ *  assessed the only available library (`jadets`) and declined to build on
+ *  it (unmaintained, a confirmed unfixed signing-path bug). Kept as a
+ *  capability probe in case that assessment is revisited. */
 export function isWebSerialAvailable(): boolean {
 	return typeof navigator !== 'undefined' && Boolean((navigator as { serial?: unknown }).serial);
 }

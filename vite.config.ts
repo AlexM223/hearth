@@ -37,7 +37,11 @@ export default defineConfig({
 			'@ledgerhq/psbtv2',
 			'buffer',
 			'bbqr',
-			'@trezor/connect-web'
+			'@trezor/connect-web',
+			// `qrcode` renders the BC-UR "Show" QR image (src/lib/hw/jadeUr.ts has
+			// no image renderer of its own, unlike bbqr's) -- lazy-imported on the
+			// same first-click basis as the libs above.
+			'qrcode'
 		],
 		// bitbox-api is a Rust core compiled to WASM with generated TS bindings
 		// (src/lib/hw/bitbox02.ts loads it lazily). WASM packages must NOT be

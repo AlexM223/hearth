@@ -69,6 +69,13 @@ function parseBbqrHeader(frame: string): BbqrHeader | null {
 	return { encoding: m[1], fileType: m[2], total, index };
 }
 
+/** Cheap per-frame shape check, used by `SignWithQr.svelte` (T8, hearth-ui7)
+ *  to auto-detect BBQr vs. BC-UR (`jadeUr.ts`) frames during camera scan-back
+ *  without either joiner having to throw first to find out. */
+export function looksLikeBbqrFrame(s: string): boolean {
+	return parseBbqrHeader(s) !== null;
+}
+
 /** Incremental BBQr reassembler for the camera scan-back flow. De-dupes
  *  repeat scans of the same frame, tolerates out-of-order arrival, and
  *  rejects mixed-sequence / non-BBQr frames loudly rather than silently
