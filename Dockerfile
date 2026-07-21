@@ -2,13 +2,19 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-# Unlike cairn (which needed a node-gyp toolchain for the `usb` addon pulled in
-# transitively by @trezor/connect-web), Hearth's dependency tree is pure
-# JS/WASM end to end (DECISIONS.md §2 "no native addons" -- hardware wallets
-# are browser-side only, src/lib/hw/, never imported on the server). A plain
-# `npm ci` is enough; there is no build toolchain to install here.
+# --ignore-scripts, not a node-gyp toolchain: the M2.5 signing surface made
+# @trezor/connect-web a devDependency, which pulls the native `usb` addon
+# transitively (the cairn lesson, DECISIONS.md §2). It is browser-side only
+# -- Vite bundles it into the client; the server never imports it and
+# `npm prune --omit=dev` below drops it from the runtime tree -- but a plain
+# `npm ci` still runs its node-gyp install script, which fails on Alpine
+# (no python/gcc, and that is deliberate: adding a toolchain to compile an
+# addon we ship nowhere would hide exactly the regression the guard below
+# exists to catch). Every build-time native tool in the tree (rolldown,
+# lightningcss, esbuild-style platform binaries) distributes prebuilt
+# platform packages via optionalDependencies and needs no install script.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
 RUN npm run build
