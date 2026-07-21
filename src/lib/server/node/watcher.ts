@@ -19,6 +19,15 @@ export interface BlockWatcher {
 	stop(): void;
 }
 
+/** Last tip height any watcher instance has published -- a synchronous,
+ *  best-effort read for loaders that want confirmation depth without an
+ *  async node round-trip (null until the first tip arrives after boot). */
+let lastKnownTipHeight: number | null = null;
+
+export function getLastKnownTip(): number | null {
+	return lastKnownTipHeight;
+}
+
 export function startBlockWatcher(node: NodeClient, opts: BlockWatcherOptions = {}): BlockWatcher {
 	const pollIntervalMs = opts.pollIntervalMs ?? 20_000;
 	let lastHeight: number | null = null;
@@ -28,6 +37,7 @@ export function startBlockWatcher(node: NodeClient, opts: BlockWatcherOptions = 
 	function publishBlock(height: number, source: 'electrum' | 'core-poll'): void {
 		if (lastHeight !== null && height <= lastHeight) return;
 		lastHeight = height;
+		lastKnownTipHeight = height;
 		log('block-watcher', { event: 'new_tip', height, source });
 		publish('block', { kind: 'broadcast' }, { height });
 	}

@@ -15,6 +15,7 @@ import {
 	resolveWalletRole
 } from '$lib/server/wallet/index.js';
 import { getNodeClient } from '$lib/server/node/index.js';
+import { getLastKnownTip } from '$lib/server/node/watcher.js';
 
 export const load: PageServerLoad = ({ locals, params }) => {
 	const user = locals.user;
@@ -52,6 +53,9 @@ export const load: PageServerLoad = ({ locals, params }) => {
 		snapshot: getSnapshot(walletId, syncNode),
 		history: getHistory(walletId, 50, syncNode),
 		utxos: getUtxos(walletId, syncNode),
-		receiveAddress: receive?.address ?? null
+		receiveAddress: receive?.address ?? null,
+		// Synchronous best-effort tip -- lets History show an approximate age
+		// per confirmation depth without an async node round-trip.
+		tipHeight: getLastKnownTip()
 	};
 };

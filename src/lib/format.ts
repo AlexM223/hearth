@@ -15,3 +15,23 @@
 export function formatSats(sats: number): string {
 	return sats.toLocaleString('en-US');
 }
+
+/**
+ * Approximate wall-clock age of a confirmation from its block depth alone
+ * (~10 minutes per block). "block 731,097" means nothing without a date, and
+ * the wallet-history read model deliberately stores only heights -- the "~"
+ * keeps the label honest about being an estimate, not a header timestamp.
+ * depth <= 0 (unconfirmed / at-tip / unknown tip) returns "".
+ */
+export function approxAgeFromDepth(depth: number): string {
+	if (depth <= 0) return '';
+	const minutes = depth * 10;
+	if (minutes < 60) return `~${minutes} min ago`;
+	const hours = Math.round(minutes / 60);
+	if (hours < 36) return `~${hours} h ago`;
+	const days = Math.round(hours / 24);
+	if (days < 60) return `~${days} d ago`;
+	const months = Math.round(days / 30);
+	if (months < 24) return `~${months} mo ago`;
+	return `~${Math.round(days / 365)} y ago`;
+}

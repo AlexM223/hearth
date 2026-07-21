@@ -71,6 +71,11 @@
 	let poolChartPath = $derived(linePath(data.pool?.hashrateSeries ?? [], 860, 120));
 	let adminChartPath = $derived(linePath(data.admin?.hashrateSeries ?? [], 860, 120));
 
+	// Off-state gating: with the engine stopped, pool/admin stat panels are
+	// placeholder noise (and "Core RPC: down · uptime 0m" reads like an
+	// outage when nothing is supposed to be running).
+	let engineRunning = $derived((data.mine ?? data.pool)?.engine.status === 'running');
+
 	let bestSharePct = $derived(
 		data.mine?.networkDifficulty && data.mine.networkDifficulty > 0
 			? Math.min(100, (data.mine.totals.bestShareEver / data.mine.networkDifficulty) * 100)
@@ -146,7 +151,9 @@
 		{/if}
 	</section>
 
-	{#if data.mine}
+	<!-- Stat panels only once mining is (or has ever been) real for this user:
+	     with mining never enabled they're placeholder noise on the off-state. -->
+	{#if data.mine && (data.mine.connection !== null || data.mine.totals.bestShareEver > 0)}
 		<section class="panel hero-section hairline">
 			<p class="t-micro">Your hashrate now</p>
 			<p class="t-stat">{formatHashrate(data.mine.totals.hashrateNow)}</p>
@@ -232,14 +239,18 @@
 
 <section class="panel pool hairline">
 	<p class="t-micro">The pool</p>
-	<p class="t-stat">{formatHashrate(data.pool?.pool.hashrateNow ?? null)}</p>
-	<p class="t-label">
-		{data.pool?.pool.connectedWorkers ?? 0} workers · {data.pool?.pool.connectedUsers ?? 0} miners online ·
-		{data.pool?.totalBlocksFound ?? 0} blocks found
-	</p>
-	<svg viewBox="0 0 860 120" role="img" aria-label="Pool hashrate, last 24 hours" class="chart">
-		<path d={poolChartPath} fill="none" stroke="var(--text-secondary)" stroke-width="1.5" />
-	</svg>
+	{#if !engineRunning && (data.pool?.totalBlocksFound ?? 0) === 0}
+		<p class="t-label">Quiet for now — the pool starts listening when mining is switched on.</p>
+	{:else}
+		<p class="t-stat">{formatHashrate(data.pool?.pool.hashrateNow ?? null)}</p>
+		<p class="t-label">
+			{data.pool?.pool.connectedWorkers ?? 0} workers · {data.pool?.pool.connectedUsers ?? 0} miners online ·
+			{data.pool?.totalBlocksFound ?? 0} blocks found
+		</p>
+		<svg viewBox="0 0 860 120" role="img" aria-label="Pool hashrate, last 24 hours" class="chart">
+			<path d={poolChartPath} fill="none" stroke="var(--text-secondary)" stroke-width="1.5" />
+		</svg>
+	{/if}
 
 	{#if data.pool?.bestShare}
 		<p class="t-label trophy-line">
@@ -276,11 +287,15 @@
 {#if data.role === 'owner' && data.admin}
 	<section class="panel admin hairline">
 		<p class="t-micro">Owner: engine status</p>
-		<p class="t-label">
-			Core RPC: {data.admin.engine.coreRpc} · uptime {Math.round(data.admin.engine.uptimeSec / 60)}m ·
-			listeners: {data.admin.engine.listeners.map((l) => `${l.role}:${l.port} (${l.connections})`).join(', ') ||
-				'—'}
-		</p>
+		{#if engineRunning}
+			<p class="t-label">
+				Core RPC: {data.admin.engine.coreRpc} · uptime {Math.round(data.admin.engine.uptimeSec / 60)}m ·
+				listeners: {data.admin.engine.listeners.map((l) => `${l.role}:${l.port} (${l.connections})`).join(', ') ||
+					'—'}
+			</p>
+		{:else}
+			<p class="t-label">Engine off — tick "Mining enabled" below and save to start it.</p>
+		{/if}
 		{#if data.admin.engine.fatalErrors.length > 0}
 			<ul class="fatal-list">
 				{#each data.admin.engine.fatalErrors as msg, i (i)}
@@ -289,27 +304,29 @@
 			</ul>
 		{/if}
 
-		<svg viewBox="0 0 860 120" role="img" aria-label="Pool hashrate (admin), last 24 hours" class="chart">
-			<path d={adminChartPath} fill="none" stroke="var(--text-secondary)" stroke-width="1.5" />
-		</svg>
+		{#if engineRunning}
+			<svg viewBox="0 0 860 120" role="img" aria-label="Pool hashrate (admin), last 24 hours" class="chart">
+				<path d={adminChartPath} fill="none" stroke="var(--text-secondary)" stroke-width="1.5" />
+			</svg>
 
-		<div class="table-scroll">
-			<table>
-				<thead>
-					<tr class="t-label"><th>Miner</th><th>Worker</th><th>Hashrate</th><th>Last share</th></tr>
-				</thead>
-				<tbody>
-					{#each data.admin.miners as m (`${m.userId}:${m.worker}`)}
-						<tr class="hairline">
-							<td class="t-label">{m.userName}</td>
-							<td class="t-label">{m.worker}</td>
-							<td class="t-mono">{formatHashrate(m.hashrate)}</td>
-							<td class="t-label">{timeAgo(m.lastShareAgoSec)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr class="t-label"><th>Miner</th><th>Worker</th><th>Hashrate</th><th>Last share</th></tr>
+					</thead>
+					<tbody>
+						{#each data.admin.miners as m (`${m.userId}:${m.worker}`)}
+							<tr class="hairline">
+								<td class="t-label">{m.userName}</td>
+								<td class="t-label">{m.worker}</td>
+								<td class="t-mono">{formatHashrate(m.hashrate)}</td>
+								<td class="t-label">{timeAgo(m.lastShareAgoSec)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
 
 		<form method="POST" action="?/saveSettings" use:enhance class="settings-form">
 			<label class="toggle">

@@ -4,7 +4,7 @@
 	// ladder). Coin control lives behind an Advanced toggle. One engine, one
 	// broadcast path -- this screen never knows single vs multisig except as a badge.
 	import { invalidateAll } from '$app/navigation';
-	import { formatSats as fmtSats } from '$lib/format.js';
+	import { formatSats as fmtSats, approxAgeFromDepth } from '$lib/format.js';
 	import SignStep from '$lib/components/sign/SignStep.svelte';
 	import Term from '$lib/components/Term.svelte';
 	import type { SigningProgress } from '$lib/shared/signing.js';
@@ -228,7 +228,14 @@
 								{tx.deltaSats > 0 ? '+' : ''}{fmtSats(tx.deltaSats)}
 							</span>
 							<span class="txid t-label">{tx.txid.slice(0, 12)}…</span>
-							<span class="conf t-label">{tx.height > 0 ? `block ${fmtSats(tx.height)}` : 'unconfirmed'}</span>
+							<span class="conf t-label">
+								{#if tx.height > 0}
+									block {fmtSats(tx.height)}{#if data.tipHeight !== null && approxAgeFromDepth(data.tipHeight - tx.height)}
+										· {approxAgeFromDepth(data.tipHeight - tx.height)}{/if}
+								{:else}
+									unconfirmed
+								{/if}
+							</span>
 						</a>
 					</li>
 				{/each}

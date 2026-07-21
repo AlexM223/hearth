@@ -11,7 +11,7 @@
  * implementation both components now import.
  */
 import { describe, expect, it } from 'vitest';
-import { formatSats } from './format.js';
+import { approxAgeFromDepth, formatSats } from './format.js';
 
 describe('formatSats (hearth-lm1.15 regression)', () => {
 	it('renders zero as "0", never as an empty string', () => {
@@ -25,5 +25,35 @@ describe('formatSats (hearth-lm1.15 regression)', () => {
 
 	it('renders a negative amount (an outgoing delta) with its sign', () => {
 		expect(formatSats(-5000)).toBe('-5,000');
+	});
+});
+
+describe('approxAgeFromDepth (~10 min per block, always "~"-prefixed)', () => {
+	it('returns "" for zero/negative depth (unconfirmed, at-tip, unknown tip)', () => {
+		expect(approxAgeFromDepth(0)).toBe('');
+		expect(approxAgeFromDepth(-3)).toBe('');
+	});
+
+	it('minutes under an hour', () => {
+		expect(approxAgeFromDepth(1)).toBe('~10 min ago');
+		expect(approxAgeFromDepth(5)).toBe('~50 min ago');
+	});
+
+	it('hours up to a day and a half', () => {
+		expect(approxAgeFromDepth(6)).toBe('~1 h ago');
+		expect(approxAgeFromDepth(144)).toBe('~24 h ago');
+	});
+
+	it('days under two months', () => {
+		expect(approxAgeFromDepth(6 * 24 * 3)).toBe('~3 d ago');
+	});
+
+	it('months under two years', () => {
+		expect(approxAgeFromDepth(6 * 24 * 90)).toBe('~3 mo ago');
+	});
+
+	it('years beyond that', () => {
+		// ~3 years of blocks: 3 * 365 * 144
+		expect(approxAgeFromDepth(3 * 365 * 144)).toBe('~3 y ago');
 	});
 });
