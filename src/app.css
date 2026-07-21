@@ -71,6 +71,17 @@
 
 	--weight-money: 460;
 
+	/* -- fee-rate flow bands (Explorer, DECISIONS.md §4.2, EXPLORER.md §3.2):
+	   economy (cool) -> priority (warm-violet). NEVER amber/orange (the
+	   Bitcoin-orange band H 20-45deg is banned everywhere else in Ingle), and
+	   never --error's coral-red -- --fee-5 must stay visually distinct from it
+	   even in the same viewport (a fee chip above a rejected-broadcast banner). -- */
+	--fee-1: #4f7a8c; /* economy -- cool slate-teal */
+	--fee-2: #6f7f9e; /* slate-violet, transitional */
+	--fee-3: #8b7aa8; /* violet, mid */
+	--fee-4: #a86f96; /* rose-violet, elevated */
+	--fee-5: #c25f6e; /* priority -- muted rose, cooler/pinker than --error */
+
 	/* -- layout grammar: 8px rhythm, hairlines not boxes, pill/panel/input radii -- */
 	--space-1: 8px;
 	--space-2: 12px;
@@ -112,6 +123,12 @@
 	--sage: #3f7a56;
 	--attention: #a1793a;
 	--error: #b6402f;
+
+	--fee-1: #3f6577;
+	--fee-2: #5c6b87;
+	--fee-3: #715f8a;
+	--fee-4: #8f5878;
+	--fee-5: #a94a58;
 }
 
 /* "System" theme (no data-theme attribute yet, or explicitly "system"): follow
@@ -144,6 +161,12 @@
 		--sage: #3f7a56;
 		--attention: #a1793a;
 		--error: #b6402f;
+
+		--fee-1: #3f6577;
+		--fee-2: #5c6b87;
+		--fee-3: #715f8a;
+		--fee-4: #8f5878;
+		--fee-5: #a94a58;
 	}
 }
 
@@ -185,6 +208,17 @@ a {
 	font-family: var(--font-ui);
 	font-size: var(--t-title);
 	font-weight: var(--t-title-weight);
+}
+
+/* The Explorer's one glanceable fee number (EXPLORER.md §3.1) -- deliberately
+   NOT .t-hero/Newsreader, which DECISIONS.md §3 reserves exclusively for the
+   wallet balance. Hanken Grotesk, 600, ~32px, tabular-nums. */
+.t-stat {
+	font-family: var(--font-ui);
+	font-size: 32px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-hero);
 }
 
 .t-label {
