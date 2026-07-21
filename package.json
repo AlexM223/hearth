@@ -18,11 +18,17 @@
 		"check:native": "node scripts/check-no-native-deps.mjs"
 	},
 	"devDependencies": {
+		"@ledgerhq/hw-app-btc": "^11.2.1",
+		"@ledgerhq/hw-transport-webhid": "^6.36.0",
+		"@ledgerhq/psbtv2": "^0.5.0",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@trezor/connect-web": "^9.7.3",
 		"@types/node": "^26.1.1",
 		"@types/nodemailer": "^8.0.1",
+		"bbqr": "^1.2.0",
+		"buffer": "^6.0.3",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",

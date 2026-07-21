@@ -98,6 +98,26 @@ export function scanProductionClosure() {
 	return { packagesScanned: visited.size, nativeHits };
 }
 
+/**
+ * SIGNING.md §0.4's "CI hardening": makes the browser-only/devDependency
+ * rule for the eight `src/lib/hw` transport libs FALSIFIABLE rather than a
+ * convention -- the built adapter-node SERVER bundle (`build/`) must
+ * contain no `.node` file, even though `@trezor/connect-web`'s transitive
+ * native `usb` sits (harmlessly, unused) in `node_modules` as a devDependency.
+ * `scanned: false` when `build/` doesn't exist yet (this repo's fast unit
+ * suite doesn't trigger a full `vite build`; CI's build step does, then
+ * calls this after).
+ * @param {string} [buildDir]
+ * @returns {{ scanned: boolean; hits: string[] }}
+ */
+export function scanBuiltServerBundle(buildDir = join(root, 'build')) {
+	if (!existsSync(buildDir)) return { scanned: false, hits: [] };
+	/** @type {string[]} */
+	const hits = [];
+	findNativeArtifacts(buildDir, hits);
+	return { scanned: true, hits };
+}
+
 // When run directly (npm script / CI), print + set exit code.
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('check-no-native-deps.mjs')) {
 	const { packagesScanned, nativeHits: hits } = scanProductionClosure();
@@ -107,4 +127,16 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
 		process.exit(1);
 	}
 	console.log(`no-native-deps guard: clean (${packagesScanned} production packages scanned)`);
+
+	const built = scanBuiltServerBundle();
+	if (built.scanned) {
+		if (built.hits.length) {
+			console.error(`NATIVE ADDON in built server bundle (build/):`);
+			for (const f of built.hits) console.error(`  ${f}`);
+			process.exit(1);
+		}
+		console.log('no-native-deps guard: built server bundle (build/) clean');
+	} else {
+		console.log('no-native-deps guard: build/ not present yet -- skipping built-bundle check (run after `npm run build`)');
+	}
 }

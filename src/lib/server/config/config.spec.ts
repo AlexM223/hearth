@@ -72,6 +72,21 @@ describe('config: loadConfig umbrel mode (DECISIONS.md §5.3)', () => {
 	});
 });
 
+describe('config: httpsExternalPort (SIGNING.md §4.3 -- the hop URL never guesses 4489)', () => {
+	it('is null when no HTTPS listener is advertised at all', () => {
+		expect(loadConfig({}).httpsExternalPort).toBeNull();
+	});
+
+	it('falls back to HEARTH_HTTPS_PORT when no external port is set', () => {
+		expect(loadConfig({ HEARTH_HTTPS_PORT: '3443' }).httpsExternalPort).toBe(3443);
+	});
+
+	it('prefers HEARTH_HTTPS_EXTERNAL_PORT over HEARTH_HTTPS_PORT (Docker port mapping)', () => {
+		const config = loadConfig({ HEARTH_HTTPS_PORT: '3443', HEARTH_HTTPS_EXTERNAL_PORT: '4489' });
+		expect(config.httpsExternalPort).toBe(4489);
+	});
+});
+
 describe('config: explicit overrides win over both platform defaults', () => {
 	it('honors HEARTH_DB / HEARTH_ORIGIN / PORT regardless of platform', () => {
 		const config = loadConfig({

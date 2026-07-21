@@ -37,6 +37,12 @@ export interface HearthConfig {
 	port: number;
 	/** Optional self-signed HTTPS port (secure context for WebHID/WebSerial/camera QR). */
 	httpsPort: number | null;
+	/** The HOST-visible HTTPS port the UI should link to for the secure-context
+	 * hop (SIGNING.md §4.3) -- may differ from `httpsPort` under Docker port
+	 * mapping. `HEARTH_HTTPS_EXTERNAL_PORT`, falling back to `HEARTH_HTTPS_PORT`.
+	 * `null` when no HTTPS listener is advertised at all (device/camera signing
+	 * methods are hidden rather than the UI guessing a literal port). */
+	httpsExternalPort: number | null;
 	/** Externally-visible origin, used for CSRF/session-cookie correctness behind app_proxy. */
 	origin: string | null;
 	dataDir: string;
@@ -113,10 +119,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HearthConfig {
 					tls: false
 				};
 
+	const httpsExternalPortRaw = env.HEARTH_HTTPS_EXTERNAL_PORT ?? env.HEARTH_HTTPS_PORT;
+
 	return {
 		platform,
 		port: num(env.PORT, 3000),
 		httpsPort: env.HEARTH_HTTPS_PORT ? num(env.HEARTH_HTTPS_PORT, 3443) : null,
+		httpsExternalPort: httpsExternalPortRaw ? num(httpsExternalPortRaw, 4489) : null,
 		origin: env.HEARTH_ORIGIN ?? null,
 		dataDir,
 		dbPath,

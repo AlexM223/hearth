@@ -28,6 +28,10 @@ jobs:
         run: npm run test
       - name: No-native-deps guard
         run: npm run check:native
+      - name: Build (adapter-node)
+        run: npm run build
+      - name: No-native-deps guard (built server bundle)
+        run: npm run check:native
 
   build-image:
     runs-on: ubuntu-latest
