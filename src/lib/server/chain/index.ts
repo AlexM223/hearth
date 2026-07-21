@@ -28,3 +28,6 @@ export type {
 } from './types.js';
 /** @deprecated pre-M4 alias -- use `Richness` from this module. */
 export type { Richness as ExplorerRichness } from './types.js';
+
+export { classifySearch, HEIGHT_RE, HEX64_RE, type SearchNode } from './search.js';
+export { isDecodableAddress } from './address.js';
