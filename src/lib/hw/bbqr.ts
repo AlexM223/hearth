@@ -5,7 +5,7 @@
  * plus base64<->bytes conversion. BROWSER-SIDE ONLY.
  */
 import { base64 } from '@scure/base';
-import { splitQRs, joinQRs } from 'bbqr';
+import { splitQRs, joinQRs, type Version } from 'bbqr';
 
 /** BBQr registry letter for a PSBT payload. */
 const PSBT_FILETYPE = 'P';
@@ -24,10 +24,20 @@ export interface EncodeOptions {
  *  (density) must also be capped, or the package won't split below its
  *  default `minVersion` floor. */
 export function encodePsbtToFrames(psbtBase64: string, opts: EncodeOptions = {}): string[] {
+	return encodePsbtToFramesDetailed(psbtBase64, opts).parts;
+}
+
+/** Same as `encodePsbtToFrames`, but also returns the QR `version` (module
+ *  density) `splitQRs` picked -- needed by `renderQRImage` (SignWithQr.svelte's
+ *  animated-display half) to render frames at a consistent density. */
+export function encodePsbtToFramesDetailed(
+	psbtBase64: string,
+	opts: EncodeOptions = {}
+): { parts: string[]; version: Version } {
 	const bytes = base64.decode(psbtBase64.trim());
 	const minSplit = opts.minSplit ?? 1;
 	const maxVersionCap = opts.maxVersion ?? (minSplit > 1 ? 5 : undefined);
-	const { parts } = splitQRs(bytes, PSBT_FILETYPE, {
+	const { parts, version } = splitQRs(bytes, PSBT_FILETYPE, {
 		encoding: '2',
 		minSplit,
 		maxSplit: opts.maxSplit ?? 1295,
@@ -35,7 +45,7 @@ export function encodePsbtToFrames(psbtBase64: string, opts: EncodeOptions = {})
 			? { minVersion: 1 as const, maxVersion: maxVersionCap as never }
 			: {})
 	});
-	return parts;
+	return { parts, version };
 }
 
 /** Cheap per-frame header parse for progress tracking -- NOT a full decode
