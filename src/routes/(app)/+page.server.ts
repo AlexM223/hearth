@@ -2,9 +2,21 @@ import { fail } from '@sveltejs/kit';
 import { describeNodeHealth, getNodeClient } from '$lib/server/node/index.js';
 import { listRecentEvents } from '$lib/server/notify/index.js';
 import { listWallets, getSnapshot } from '$lib/server/wallet/index.js';
-import { householdGreetingName, hasBeenWelcomed, markWelcomed } from '$lib/server/auth/index.js';
+import {
+	householdGreetingName,
+	hasBeenWelcomed,
+	markWelcomed,
+	householdSummary,
+	type WalletBalanceReader
+} from '$lib/server/auth/index.js';
 import { heroKindFor } from './home-choreography.js';
 import type { Actions, PageServerLoad } from './$types';
+
+const readBalances: WalletBalanceReader = (userId) =>
+	listWallets(userId).map((w) => {
+		const snap = getSnapshot(w.id);
+		return { confirmedSats: snap?.confirmedSats ?? 0, unconfirmedSats: snap?.unconfirmedSats ?? 0 };
+	});
 
 /** Home = the hearth (DECISIONS.md §4.2): live tip height, plain-language
  *  node health, the watchtower-feed skeleton, and the first-30-seconds
@@ -41,7 +53,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		ownBalance: { confirmedSats, unconfirmedSats },
 		// Owner is never a "fresh invitee" (first-run bootstrap, not an invite
 		// accept) -- the ribbon is a Member/Guest-only welcome.
-		showWelcome: user.role !== 'owner' && !hasBeenWelcomed(user.id)
+		showWelcome: user.role !== 'owner' && !hasBeenWelcomed(user.id),
+		// Household cross-member roll-up (COME-ABOARD.md §4) -- Owner only,
+		// read-only, computed fresh on every load (same SWR-synchronous pattern
+		// as the wallets list; refreshed live by the existing 'block' broadcast
+		// tick rather than a dedicated push, see T10's close-out note).
+		household: user.role === 'owner' ? householdSummary(readBalances) : null
 	};
 };
 

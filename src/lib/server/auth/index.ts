@@ -65,3 +65,17 @@ export {
 } from './invites.js';
 
 export { acceptInvite, AcceptInviteError, type AcceptInviteInput, type AcceptedMember } from './accept.js';
+
+export {
+	listMembers,
+	householdSummary,
+	activityBucket,
+	changeMemberRole,
+	offboardMember,
+	MemberError,
+	type MemberRow,
+	type ActivityBucket,
+	type HouseholdSummary,
+	type WalletBalanceReader,
+	type OffboardWalletPolicy
+} from './members.js';

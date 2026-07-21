@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { formatSats } from '$lib/format.js';
 	import type { PageProps } from './$types';
 
@@ -41,6 +42,10 @@
 				if (!syncing) {
 					liveHealthText = `Synced · block ${payload.height.toLocaleString('en-US')}`;
 				}
+				// Refresh the Owner's household roll-up (and everyone's own
+				// balance) on the same tick rather than a dedicated admin-scoped
+				// push (COME-ABOARD §3.5) -- see T10's close-out note on why.
+				void invalidateAll();
 			} catch {
 				// Ignore malformed frames -- never let a bad push break the page.
 			}
@@ -67,6 +72,19 @@
 		<form method="POST" action="?/dismissWelcome" onsubmit={() => (welcomeDismissed = true)}>
 			<button class="dismiss" type="submit" aria-label="Dismiss">&times;</button>
 		</form>
+	</section>
+{/if}
+
+{#if data.household}
+	<section class="panel household hairline">
+		<p class="t-micro">Household</p>
+		<p class="t-title household-total">
+			{formatSats(data.household.confirmedSats)} <span class="unit">sats</span>
+		</p>
+		<p class="t-label muted">
+			{data.household.memberCount}
+			{data.household.memberCount === 1 ? 'member' : 'members'} · read-only, never a member's draft
+		</p>
 	</section>
 {/if}
 
@@ -156,6 +174,19 @@
 
 	.dismiss:hover {
 		color: var(--text);
+	}
+
+	.household {
+		margin-bottom: var(--space-3);
+	}
+
+	.household-total {
+		margin: 4px 0;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.household .muted {
+		color: var(--text-muted);
 	}
 
 	.hero {

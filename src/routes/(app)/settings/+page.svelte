@@ -1,13 +1,33 @@
 <script lang="ts">
 	// Settings: chain backend, display, notifications, members & invites
-	// (DECISIONS.md §4.2). Auth/members land in M1/M3; this is the M0 shell.
+	// (DECISIONS.md §4.2). Members & Invites landed in M3; chain backend/
+	// display/notifications remain M4/M6 shells.
 </script>
 
 <section class="panel">
 	<p class="t-micro">Settings</p>
 	<h1 class="t-title">Chain backend, display &amp; members</h1>
 	<p class="t-label">
-		Node auto-connect, sats-first display, notification channels and invites will live here starting
-		in M1.
+		Node auto-connect, sats-first display, and notification channels will live here starting in
+		M4/M6.
 	</p>
 </section>
+
+<section class="panel entry">
+	<p class="t-micro">Members &amp; invites</p>
+	<p class="t-label">
+		Invite the people you trust aboard, manage roles, and see the household's shared standing.
+	</p>
+	<a class="btn-primary" href="/settings/members">Manage members &amp; invites</a>
+</section>
+
+<style>
+	.entry {
+		margin-top: var(--space-3);
+	}
+	.entry a {
+		display: inline-block;
+		margin-top: var(--space-2);
+		text-decoration: none;
+	}
+</style>
