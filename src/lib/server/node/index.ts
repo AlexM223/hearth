@@ -70,6 +70,53 @@ export class NodeClient {
 	}
 
 	/**
+	 * THE broadcast rail (DECISIONS.md §4.4 per-method policy): Electrum primary,
+	 * Bitcoin Core `sendrawtransaction` fallback. This is the node's single
+	 * broadcast primitive; the wallet engine reaches it from exactly ONE call
+	 * site (src/lib/server/wallet/broadcast.ts -- the constitutional one-path
+	 * rule, WALLET-ENGINE §6.3). Returns the txid the rail reports (the wallet
+	 * engine then verifies it against its locally-recomputed txid).
+	 */
+	async broadcast(rawTxHex: string): Promise<string> {
+		try {
+			return await this.electrumPool.broadcast(rawTxHex);
+		} catch (electrumErr) {
+			// Electrum rejected or is down -- try Core if it is reachable. A
+			// genuine policy rejection will also fail here and surface honestly.
+			try {
+				return await this.core.call<string>('sendrawtransaction', [rawTxHex]);
+			} catch {
+				throw electrumErr instanceof Error ? electrumErr : new Error(String(electrumErr));
+			}
+		}
+	}
+
+	/** Raw tx hex for a prevout (nonWitnessUtxo / legacy inputs). Electrum first,
+	 *  Core `getrawtransaction` fallback. */
+	async fetchRawTx(txid: string): Promise<Uint8Array> {
+		try {
+			const hexStr = (await this.electrumPool.getTransaction(txid, false)) as string;
+			return Uint8Array.from(Buffer.from(hexStr, 'hex'));
+		} catch {
+			const hexStr = await this.core.call<string>('getrawtransaction', [txid]);
+			return Uint8Array.from(Buffer.from(hexStr, 'hex'));
+		}
+	}
+
+	/** Electrum relay fee floor in sat/vB (default 1 when unavailable). */
+	async getMinFeeRate(): Promise<number> {
+		try {
+			const btcPerKvb = await this.electrumPool.estimateFee(1000);
+			if (typeof btcPerKvb === 'number' && btcPerKvb > 0) {
+				return Math.max(1, Math.floor((btcPerKvb * 1e8) / 1000));
+			}
+		} catch {
+			// fall through to the relay floor
+		}
+		return 1;
+	}
+
+	/**
 	 * Health snapshot: which rails are up, tip height, sync progress, peer
 	 * count, mempool summary. Every datum resolves independently
 	 * (Promise.allSettled) so one dead rail never blanks data the other rail

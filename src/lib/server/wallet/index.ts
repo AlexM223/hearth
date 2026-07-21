@@ -92,9 +92,12 @@ export {
 	buildPsbt,
 	reviewSummary,
 	assertSameTransaction,
+	applySignature,
 	type BuildNode,
 	type BuildRequest
 } from './psbt.js';
+export { broadcastDraft, type BroadcastNode, type BroadcastResult } from './broadcast.js';
+export { listDraftRows as listDrafts, getDraftRow as getDraft } from './repo.js';
 export {
 	selectCoins,
 	dustThreshold,

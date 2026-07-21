@@ -25,9 +25,11 @@ import {
 	updateCursors,
 	walletKeyIds,
 	getDraftRow,
+	updateDraftPsbt,
 	type NewDraft
 } from './repo.js';
-import { CommitmentError, NotFoundError } from './errors.js';
+import { AlreadyReplacedError, CommitmentError, NotFoundError, WalletError } from './errors.js';
+import type { SigningProgress } from './types.js';
 
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -122,7 +124,17 @@ export async function buildPsbt(
 					? [{ userId, assignedKeyIds: walletKeyIds(walletId) }]
 					: undefined
 		};
-		const draftId = insertDraft(newDraft);
+		let draftId: number;
+		try {
+			draftId = insertDraft(newDraft);
+		} catch (e) {
+			// The RBF partial-unique index (idx_psbt_drafts_replaces) is the real
+			// gate: at most one live replacement per replaced txid (§1).
+			if (req.replacesTxid && /UNIQUE|constraint/i.test(String((e as Error).message))) {
+				throw new AlreadyReplacedError();
+			}
+			throw e;
+		}
 		if (changeIndex != null) {
 			updateCursors(walletId, wallet.receiveCursor, Math.max(wallet.changeCursor, changeIndex + 1));
 		}
@@ -238,6 +250,43 @@ export function reviewSummary(userId: number, walletId: number, draftId: number)
 		totalInputSats,
 		progress: engine.signingProgress(draft.psbt)
 	};
+}
+
+/** Merge an externally-produced signed PSBT into a draft (WALLET-ENGINE §2.5).
+ *  Source is a WebHID result, an air-gapped PSBT file, or a reassembled BBQr QR
+ *  payload -- all arrive as base64 PSBT; this function does not care which.
+ *  Single-sig: assertSameTransaction then adopt. Multisig: combine (foreign-sig +
+ *  SIGHASH_ALL guards). Persists the merged PSBT, moves draft -> signing. NEVER
+ *  holds keys -- signing happened outside the process. */
+export function applySignature(
+	userId: number,
+	walletId: number,
+	draftId: number,
+	signedPsbtBase64: string
+): { review: ReviewSummary; progress: SigningProgress } {
+	const wallet = getWalletRow(userId, walletId);
+	if (!wallet) throw new NotFoundError('wallet not found');
+	const draft = getDraftRow(walletId, draftId);
+	if (!draft) throw new NotFoundError('draft not found');
+	if (draft.status === 'broadcast' || draft.status === 'confirmed') {
+		throw new WalletError('this draft has already been broadcast');
+	}
+	const engine = selectEngine(wallet);
+
+	let merged: string;
+	if (wallet.kind === 'single') {
+		assertSameTransaction(draft.psbt, signedPsbtBase64);
+		merged = signedPsbtBase64;
+	} else {
+		if (!engine.combine) throw new WalletError('multisig engine cannot combine');
+		merged = engine.combine(draft.psbt, signedPsbtBase64);
+	}
+
+	const progress = engine.signingProgress(merged);
+	const nextStatus = progress.collected > 0 ? 'signing' : draft.status;
+	updateDraftPsbt(draftId, merged, nextStatus);
+
+	return { review: reviewSummary(userId, walletId, draftId), progress };
 }
 
 /** THE commitment check (WALLET-ENGINE §4.9 invariant 2, §5.2). Byte-for-byte
