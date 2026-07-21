@@ -67,12 +67,12 @@ and gallery assets in a separate repo. A community store has no such
 separate hosting -- confirmed against the official template's own example
 app (`sparkles-hello-world/umbrel-app.yml`), which sets `icon:` to a real
 image URL and `gallery:` to full hosted image URLs (imgur, in the example).
-This manifest's `icon:` and `gallery:` entries currently point at
-`raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/...`
-paths -- the natural place to host them once this repo is real (commit the
-image files right here, reference them by their raw GitHub URL). None of
-those files exist yet; the URLs are forward-looking placeholders, not real
-links.
+This manifest's `icon:` and `gallery:` entries point at
+`raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/...`
+paths -- the assets live right here in the app's directory: `icon.svg`
+(256x256, a scale-up of the app's own favicon flame) and `1.jpg`..`5.jpg`
+(1440x900, captured per `packaging/umbrel/hearth/GALLERY.md`'s shot list
+against a live instance wired to a real node).
 
 ## Lint status
 
@@ -86,28 +86,17 @@ expected/documented findings as the canonical package
 official-store PR, by design) and `image.pinned` (placeholder digest, by
 design) -- and nothing else. No port or id collisions.
 
-## What's still needed before this is real
+## Status
 
-1. **A real icon.** `icon.svg`, 256x256, matching the official
-   `umbrel-apps-gallery` icon convention (a square SVG, `viewBox="0 0 256
-   256"`). No such asset exists yet -- this is a design task, not something
-   auto-generated from the existing `src/lib/assets/favicon.svg` without
-   Alex's review.
-2. **The five gallery screenshots**, per
-   `packaging/umbrel/hearth/GALLERY.md`'s shot list (exact routes/states/
-   resolution). None captured yet.
-3. **A real image digest.** `docker-compose.yml`'s
-   `ghcr.io/alexm223/hearth:0.1.0@sha256:<to-fill-after-push>` is a
-   deliberately-invalid placeholder -- see
-   `packaging/umbrel/hearth/RELEASE-CHECKLIST.md` for the exact command to
-   get the real one once `.github/workflows/release.yml` has actually run
-   against a real tag push.
-4. **Push this directory's contents to a real
-   `github.com/AlexM223/hearth-app-store` repository** (does not exist yet).
-5. **Add the store to a real Umbrel device or umbrelOS test environment**
-   and install through it -- per the `umbrel-test-app` skill's evidence
-   checklist (fresh install, dependency prompts, restart, persistence).
+Published. The 0.1.0 image is on GHCR (multi-arch, digest-pinned in
+`ingle-hearth/docker-compose.yml`), the icon and the five gallery shots are
+committed alongside the manifest, and this directory's contents live at
+`github.com/AlexM223/hearth-app-store` (default branch `main`, which the
+manifest's raw URLs reference). The canonical copy of this content stays in
+the main Hearth repo under `packaging/store-repo/` -- keep the two in sync
+by hand when either changes.
 
-None of the above happened in this milestone, by design -- the M7 builder's
-job was to prepare this content, not to publish it. All five are Alex's
-explicit go.
+Remaining follow-ups tracked in the main repo's release checklist: install
+through a real Umbrel device (fresh install, dependency prompts, restart,
+update-path) and recapture gallery shot 4 with a live regtest mining
+worker instead of the dashboard's off-state.
