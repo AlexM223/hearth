@@ -80,6 +80,33 @@ export function setPreference(
 		.run(userId, eventType, channel, enabled ? 1 : 0, config ? JSON.stringify(config) : null);
 }
 
+/** One row per SAVED (user, event_type, channel) preference -- everything
+ *  else falls back to the documented default (T7's Settings/`/me` matrix
+ *  reads this once per page load instead of one query per cell). */
+export interface SavedPreferenceRow {
+	eventType: string;
+	channel: string;
+	enabled: boolean;
+	config: PreferenceConfig | null;
+}
+
+export function listSavedPreferences(userId: number): SavedPreferenceRow[] {
+	const rows = getDb()
+		.prepare('SELECT event_type, channel, enabled, config FROM notification_preferences WHERE user_id = ?')
+		.all(userId) as { event_type: string; channel: string; enabled: number; config: string | null }[];
+	return rows.map((r) => {
+		let config: PreferenceConfig | null = null;
+		if (r.config) {
+			try {
+				config = JSON.parse(r.config);
+			} catch {
+				config = null;
+			}
+		}
+		return { eventType: r.event_type, channel: r.channel, enabled: r.enabled === 1, config };
+	});
+}
+
 export const DEFAULT_MILESTONES: readonly number[] = [1];
 
 /** The confirmation-milestone list a user has opted into (WATCHTOWER.md

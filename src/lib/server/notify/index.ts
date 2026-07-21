@@ -17,6 +17,7 @@ import { createWatchtowerHooks, createConfirmHooks } from './wiring.js';
 import { startOutboxWorker, type OutboxWorker } from './queue/outbox.js';
 import { CHANNELS } from './channels/index.js';
 import { initNotifyOrigin } from './config/channelConfig.js';
+import { createQuietHours } from './config/quietHours.js';
 
 export type NotifyChannel = 'email' | 'telegram' | 'ntfy' | 'nostr' | 'webhook';
 
@@ -141,9 +142,10 @@ export function startWatchtowerService(node: NodeClient): WatchtowerService {
 }
 
 /** Starts the outbox drain worker (T4) wired to the real channel registry
- *  (T6). Idempotent per call -- hooks.server.ts calls this once at boot. */
+ *  (T6) and the real per-user quiet-hours window (T7, WATCHTOWER.md §5.4).
+ *  Idempotent per call -- hooks.server.ts calls this once at boot. */
 export function startNotificationQueueWorker(): OutboxWorker {
-	return startOutboxWorker({ channels: CHANNELS });
+	return startOutboxWorker({ channels: CHANNELS, quietHours: createQuietHours() });
 }
 
 /** HEARTH_ORIGIN (DECISIONS.md §5.3) -- set once at boot so render.ts's
