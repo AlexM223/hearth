@@ -33,16 +33,19 @@ description: >-
   tick.
 
 
-  A couple of ports beyond the usual Umbrel app page are worth knowing about
-  before you install. Hearth also publishes a self-signed HTTPS listener on
-  port 4489, reserved for browser features that need a secure context
-  (in-browser hardware-wallet signing is planned but not yet built --
-  today's signing flow is PSBT-based, outside the browser); your browser
-  will ask you to accept its certificate the first time you open it, and
-  it's safe to ignore until that feature ships. If you turn on the solo
-  mining pool (off by default), your miner (e.g. a Bitaxe) connects to this
-  box on port 3343 (standard difficulty) or 3345 (ASIC-floor difficulty);
-  nothing listens on either port until mining is enabled.
+  Signing itself happens right in the browser: plug in a Ledger or Trezor,
+  or go air-gapped with a signed-transaction file or an animated QR code --
+  whichever signer you already trust. A couple of ports beyond the usual
+  Umbrel app page are worth knowing about before you install. Hearth also
+  publishes a self-signed HTTPS listener on port 4489, which is what gives
+  the browser the secure connection that Ledger and camera QR-scanning
+  need (Trezor's popup and file-based signing work over the app's usual
+  address, no extra step); your browser will ask you to accept its
+  certificate the first time it sends you there, and that's expected. If
+  you turn on the solo mining pool (off by default), your miner (e.g. a
+  Bitaxe) connects to this box on port 3343 (standard difficulty) or 3345
+  (ASIC-floor difficulty); nothing listens on either port until mining is
+  enabled.
 
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
