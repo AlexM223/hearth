@@ -425,3 +425,101 @@ export function getTransactionRows(walletId: number, limit = 50): TxDbRow[] {
 		)
 		.all(walletId, limit) as unknown as TxDbRow[];
 }
+
+// -------------------------------------------------------------- draft writes
+
+export interface NewDraft {
+	walletId: number;
+	createdBy: number;
+	psbt: string;
+	recipients: { address: string; amountSats: number }[];
+	amountSats: number;
+	feeSats: number;
+	feeRate: number;
+	changeIndex: number | null;
+	replacesTxid: string | null;
+	expiresAt: string;
+	inputs: { txid: string; vout: number; valueSats: number }[];
+	signers?: { userId: number; assignedKeyIds: number[] }[];
+}
+
+/** Persist a draft + its authoritative input set (+ frozen multisig roster) in
+ *  one transaction. The RBF partial-unique index enforces one live replacement. */
+export function insertDraft(draft: NewDraft): number {
+	return withTransaction((db) => {
+		const res = db
+			.prepare(
+				`INSERT INTO psbt_drafts (wallet_id, created_by, psbt, recipients, amount_sats, fee_sats, fee_rate, change_index, replaces_txid, expires_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			)
+			.run(
+				draft.walletId,
+				draft.createdBy,
+				draft.psbt,
+				JSON.stringify(draft.recipients),
+				draft.amountSats,
+				draft.feeSats,
+				draft.feeRate,
+				draft.changeIndex,
+				draft.replacesTxid,
+				draft.expiresAt
+			);
+		const draftId = Number(res.lastInsertRowid);
+		const insInput = db.prepare(
+			'INSERT INTO psbt_draft_inputs (draft_id, txid, vout, value_sats) VALUES (?, ?, ?, ?)'
+		);
+		for (const inp of draft.inputs) insInput.run(draftId, inp.txid, inp.vout, inp.valueSats);
+		if (draft.signers && draft.signers.length > 0) {
+			const insSigner = db.prepare(
+				'INSERT INTO psbt_draft_signers (draft_id, user_id, assigned_key_ids) VALUES (?, ?, ?)'
+			);
+			for (const s of draft.signers) insSigner.run(draftId, s.userId, JSON.stringify(s.assignedKeyIds));
+		}
+		return draftId;
+	});
+}
+
+/** Update a draft's working PSBT + status (used by applySignature / broadcast). */
+export function updateDraftPsbt(draftId: number, psbt: string, status: DraftStatus): void {
+	getDb()
+		.prepare(
+			`UPDATE psbt_drafts SET psbt = ?, status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`
+		)
+		.run(psbt, status, draftId);
+}
+
+/** The AUTHORITATIVE reservation source (§5.4): outpoints locked by an in-flight
+ *  draft of this user. An indexed query -- never "parse every stored PSBT". */
+export function reservedOutpoints(userId: number): Set<string> {
+	const rows = getDb()
+		.prepare(
+			`SELECT i.txid AS txid, i.vout AS vout
+			 FROM psbt_draft_inputs i
+			 JOIN psbt_drafts d ON i.draft_id = d.id
+			 JOIN wallets w ON d.wallet_id = w.id
+			 WHERE w.user_id = ? AND d.status IN ('draft','signing')`
+		)
+		.all(userId) as unknown as { txid: string; vout: number }[];
+	return new Set(rows.map((r) => `${r.txid}:${r.vout}`));
+}
+
+/** Which live drafts reserve a given outpoint (for coin-control warnings). */
+export function draftsReservingOutpoint(userId: number, txid: string, vout: number): number[] {
+	const rows = getDb()
+		.prepare(
+			`SELECT d.id AS id FROM psbt_draft_inputs i
+			 JOIN psbt_drafts d ON i.draft_id = d.id
+			 JOIN wallets w ON d.wallet_id = w.id
+			 WHERE w.user_id = ? AND i.txid = ? AND i.vout = ? AND d.status IN ('draft','signing')`
+		)
+		.all(userId, txid, vout) as unknown as { id: number }[];
+	return rows.map((r) => r.id);
+}
+
+/** Wallet-scoped key ids for the frozen multisig roster snapshot. */
+export function walletKeyIds(walletId: number): number[] {
+	const rows = getDb()
+		.prepare('SELECT id FROM wallet_keys WHERE wallet_id = ? ORDER BY position ASC')
+		.all(walletId) as unknown as { id: number }[];
+	return rows.map((r) => r.id);
+}

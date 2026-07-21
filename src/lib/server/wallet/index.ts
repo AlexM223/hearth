@@ -87,3 +87,22 @@ export {
 	type WalletSnapshot
 } from './sync.js';
 export { scanWallet, type ScanRail, type ScanResult } from './scan.js';
+
+export {
+	buildPsbt,
+	reviewSummary,
+	assertSameTransaction,
+	type BuildNode,
+	type BuildRequest
+} from './psbt.js';
+export {
+	selectCoins,
+	dustThreshold,
+	outputVsize,
+	changeKind,
+	bip69SortInputs,
+	bip69SortOutputs,
+	COINBASE_MATURITY,
+	MAX_FEE_RATE
+} from './select.js';
+export { decodeAddress, isValidAddress, type OutputKind } from './address.js';
