@@ -78,6 +78,20 @@ export function nextReceiveAddress(userId: number, walletId: number): WalletAddr
 	return addr;
 }
 
+/**
+ * The current receive address WITHOUT advancing `receive_cursor` (mining's
+ * authTable.ts, readModels.ts: a payout/display address must never itself
+ * consume the next receive slot -- only an actual `nextReceiveAddress` call
+ * on block acceptance does that). Pure/sync -- derivation is ECC-free and
+ * `receiveCursor` is already the DB-held source of truth, so no chain call is
+ * needed to "peek" (unlike a reference implementation that derives the cursor
+ * from live chain usage).
+ */
+export function peekReceiveAddress(wallet: Wallet): WalletAddress {
+	const [addr] = deriveAddresses(wallet, 0, wallet.receiveCursor, 1);
+	return addr;
+}
+
 export {
 	resolveWalletRole,
 	redactDraft,

@@ -117,3 +117,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HearthConfig {
 		electrum
 	};
 }
+
+/**
+ * Minimal instance-wide feature-flag gate (DECISIONS.md §4.6/§6 M5: the
+ * mining engine's three-gate start sequence is "feature flag AND operator
+ * setting AND Core RPC configured"). Hearth has no dynamic/admin-configurable
+ * feature-flag system yet (unlike the cairn reference's `isFeatureEnabled`,
+ * which reads a flags table with per-instance overrides) -- M0-M4 never
+ * built one. Rather than invent that whole system as a side effect of M5,
+ * this is a deliberately minimal env-var-backed placeholder: `HEARTH_FEATURE_
+ * <NAME>` (uppercased), default enabled. The meaningful "off by default" gate
+ * for mining is the `mining_enabled` operator setting (mining/settings.ts),
+ * which defaults false -- this flag exists only as the coarse instance-wide
+ * kill switch the three-gate design calls for. Reads `process.env` directly
+ * (never cached) so a flag flip takes effect on the next check, matching the
+ * "never freeze config at module load" rule this file already follows for
+ * loadConfig(). Documented deviation from the richer system MINING-ENGINE.md
+ * anchors to cairn's `isFeatureEnabled('mining', null)` call shape.
+ */
+export function isFeatureEnabled(name: string, env: NodeJS.ProcessEnv = process.env): boolean {
+	const key = `HEARTH_FEATURE_${name.toUpperCase()}`;
+	const v = env[key];
+	if (v === undefined) return true;
+	return v !== '0' && v.toLowerCase() !== 'false';
+}
