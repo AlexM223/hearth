@@ -6,6 +6,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { formatSats } from '$lib/format.js';
 	import { bucketFeeHistogram, type FeeBand } from '$lib/explorerFlow.js';
+	import { refreshExplorerSnapshotAndReload } from '$lib/explorerRefresh.js';
 	import DegradeBanner from '$lib/components/DegradeBanner.svelte';
 	import type { PageProps } from './$types';
 
@@ -42,6 +43,16 @@
 		// load() stays rail-free (the SWR contract).
 		void fetchHistogram();
 
+		// Self-heal on mount (hearth-7hw): the persisted `explorer_snapshot`
+		// row may be empty (first boot) or stale (no block has landed since
+		// the last visit) -- the live API routes (/api/chain/fees,
+		// /api/chain/blocks) always compute fresh, so without this the index
+		// page could show a permanent degraded state ("no node connection")
+		// while the rest of the app has full data, and a reload wouldn't fix
+		// it (load() only re-reads the same snapshot). Throttled/single-flight
+		// server-side, so this is cheap even right after a real refresh.
+		void refreshExplorerSnapshotAndReload(fetch, invalidateAll);
+
 		// SSE (T8): a new block prepends live -- POST /api/chain/refresh (the
 		// throttled/single-flight snapshot writer) then invalidateAll() re-runs
 		// this page's load() and re-renders from the fresh snapshot, all
@@ -49,13 +60,7 @@
 		const source = new EventSource('/api/events');
 		source.addEventListener('block', () => {
 			void (async () => {
-				try {
-					await fetch('/api/chain/refresh', { method: 'POST' });
-				} catch {
-					// best-effort -- invalidateAll() below still picks up whatever
-					// snapshot is currently persisted, never worse than before.
-				}
-				await invalidateAll();
+				await refreshExplorerSnapshotAndReload(fetch, invalidateAll);
 				await fetchHistogram();
 			})();
 		});
