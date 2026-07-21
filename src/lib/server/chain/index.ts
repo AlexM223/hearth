@@ -40,3 +40,10 @@ export {
 } from './blocks.js';
 export { getBlockPoolAttribution, listPoolFoundBlockHashes } from './pool.js';
 export { clearAllCaches } from './cache.js';
+export {
+	getTxDetail,
+	getCpfpInfo,
+	MAX_PREVOUT_RESOLVE,
+	MAX_SPENT_CHECK_OUTPUTS,
+	type TxNode
+} from './tx.js';
