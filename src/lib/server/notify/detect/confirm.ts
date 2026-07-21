@@ -96,9 +96,9 @@ async function walletStillContainsTxid(
 	rail: ConfirmElectrumRail,
 	wallet: Wallet,
 	txid: string
-): Promise<{ anyFetched: boolean; found: boolean }> {
+): Promise<{ anyFetched: boolean; foundConfirmed: boolean }> {
 	let anyFetched = false;
-	let found = false;
+	let foundConfirmed = false;
 	for (const chain of [0, 1] as const) {
 		const depth = watchDepthFor(wallet.id, chain);
 		const addrs = deriveAddresses(wallet, chain, 0, depth);
@@ -106,20 +106,29 @@ async function walletStillContainsTxid(
 			try {
 				const history = await rail.getHistory(a.scripthash, 'background');
 				anyFetched = true;
-				if (history.some((h) => h.tx_hash === txid)) found = true;
+				// Height>0 specifically -- a tx merely appearing in mempool history
+				// (height<=0) is NOT "still confirmed" (that IS the reorg this
+				// function may have been called to confirm); only a genuinely
+				// confirmed sighting elsewhere counts as "a no-txindex miss, still
+				// present" (WATCHTOWER.md §1.6.1 step 1).
+				if (history.some((h) => h.tx_hash === txid && h.height > 0)) foundConfirmed = true;
 			} catch {
 				// this scripthash's fetch failed -- keep trying the others
 			}
 		}
 	}
-	return { anyFetched, found };
+	return { anyFetched, foundConfirmed };
 }
 
 /**
- * Routed when `getTx` throws not-found (WATCHTOWER.md §1.6.1).
- * `wasConfirmed` is whatever the ledger row said BEFORE this call (a
- * 'pending' row that vanishes was never confirmed; a 'notified' row that
- * vanishes was, and IS the reorg case).
+ * Routed when `getTx` throws not-found, OR when a previously->=1-confirmation
+ * row's confirmations have dropped back below CONFIRM_THRESHOLD while still
+ * fetchable (WATCHTOWER.md §1.6.1) -- Bitcoin Core commonly restores an
+ * invalidated block's transactions straight back into the mempool rather
+ * than making them unfetchable, so relying on a throw ALONE would miss the
+ * most common real-world reorg shape. `wasConfirmed` is whatever the ledger
+ * row said BEFORE this call (a 'pending' row that vanishes was never
+ * confirmed; a 'notified' row that vanishes was, and IS the reorg case).
  */
 async function reconcileDisappeared(
 	rail: ConfirmElectrumRail,
@@ -128,9 +137,9 @@ async function reconcileDisappeared(
 ): Promise<void> {
 	const wallet = getWalletRowUnscoped(row.walletId);
 	if (!wallet) return; // wallet vanished mid-check -- nothing to reconcile
-	const { anyFetched, found } = await walletStillContainsTxid(rail, wallet, row.txid);
+	const { anyFetched, foundConfirmed } = await walletStillContainsTxid(rail, wallet, row.txid);
 	if (!anyFetched) return; // Electrum unreachable on every rail -- fail closed, retry later
-	if (found) return; // a no-txindex miss on getTx alone -- still present in address history
+	if (foundConfirmed) return; // a no-txindex miss on getTx alone -- still confirmed per address history
 
 	const wasConfirmed = row.confirmed === true;
 	let ownSend = false;
@@ -205,10 +214,21 @@ async function processReorgWindowRow(
 		return;
 	}
 
+	const confirmations = detail.confirmations ?? 0; // absent -- fail closed, not confirmed enough
+	// A real reorg does not always make a tx unfetchable -- Bitcoin Core
+	// typically restores an invalidated block's transactions straight back
+	// into the mempool, so `getTx` keeps succeeding but `confirmations` drops
+	// below CONFIRM_THRESHOLD (the row already claimed >=1). That is JUST AS
+	// much a reorg as a hard "not found" -- route it the same way, rather
+	// than only reacting to a throw (which alone would miss this common case).
+	if (confirmations < CONFIRM_THRESHOLD) {
+		await reconcileDisappeared(rail, row, hooks);
+		return;
+	}
+
 	const milestones = hooks.milestonesForUser?.(row.userId) ?? DEFAULT_MILESTONES;
 	const milestone = nextMilestone(row.lastMilestone, milestones);
 	if (milestone === null) return; // no further milestone configured/available
-	const confirmations = detail.confirmations ?? 0; // absent -- fail closed, not confirmed enough
 	if (confirmations < milestone) return; // not there yet
 
 	if (row.confirmedHeight === null) return; // baselined/legacy -- never re-checked

@@ -5,9 +5,15 @@
  * is wrapped and NEVER throws (DECISIONS.md §4.9 invariant 4, applied to
  * notify) -- a detection bug must never crash the app.
  *
- * Reuses the wallet module's public surface for wallet enumeration and
- * scriptPubKey sets (deriveAddresses, listAllWalletRows,
- * listWalletScriptPubKeys) -- derivation lives in wallet/ only.
+ * Reuses the wallet module's public surface for wallet enumeration AND
+ * scriptPubKey sets -- WATCHTOWER.md §0.3: "the notify watcher reuses the
+ * wallet module's public surface to... derive watched scripts/scriptPubKeys
+ * (deriveAddresses...) rather than re-deriving." The scriptPubKey set is
+ * therefore computed via a FRESH deriveAddresses call at the same depth
+ * refreshWatches uses, never by reading the (possibly still-empty, if the
+ * wallet has never been synced/scanned) persisted `addresses` table --
+ * caught live by the regtest e2e test (§6.8): a watch-only wallet that had
+ * never been synced underreported every genuine receive as 0 sats.
  */
 import type { DatabaseSync } from 'node:sqlite';
 import type { NodeClient } from '$lib/server/node/index.js';
@@ -16,7 +22,6 @@ import {
 	listAllWalletRows,
 	getWalletRowUnscoped,
 	highestUsedIndex,
-	listWalletScriptPubKeys,
 	GAP_LIMIT,
 	type Wallet
 } from '$lib/server/wallet/index.js';
@@ -121,11 +126,22 @@ function walletStillExists(w: Watched): boolean {
 	return getWalletRowUnscoped(w.walletId) !== null;
 }
 
-/** scriptPubKey set (lowercase hex) for EVERY watched address of the wallet --
- *  reused from the wallet module's persisted `addresses` rows, never
- *  re-derived here (WATCHTOWER.md §0.3's reuse boundary). */
+/** scriptPubKey set (lowercase hex) for EVERY watched address of the wallet,
+ *  computed via a FRESH deriveAddresses call (the wallet module's public
+ *  surface) at the SAME depth refreshWatches subscribes -- correct even for
+ *  a wallet that has never been synced/scanned (the persisted `addresses`
+ *  table may still be empty then; this never depends on it). */
 function walletScriptSet(walletId: number): Set<string> {
-	return new Set(listWalletScriptPubKeys(walletId));
+	const wallet = getWalletRowUnscoped(walletId);
+	if (!wallet) return new Set();
+	const scripts = new Set<string>();
+	for (const chain of [0, 1] as const) {
+		const depth = watchDepthFor(walletId, chain);
+		for (const addr of deriveAddresses(wallet, chain, 0, depth)) {
+			scripts.add(addr.scriptPubKey.toLowerCase());
+		}
+	}
+	return scripts;
 }
 
 const btcToSats = (btc: number): number => Math.round(btc * 1e8);
@@ -348,7 +364,11 @@ export async function enumerateAndSubscribe(state: WatcherState, rail: WatcherEl
 /** Adapts a live NodeClient's Electrum pool to the narrow WatcherElectrumRail
  *  surface, always on the BACKGROUND lane (DECISIONS.md §4.4: a detection
  *  sweep must never starve an interactive send-page load). */
-function railFromNode(node: NodeClient): WatcherElectrumRail {
+/** Exported so hooks.server.ts (T8) can reuse the SAME adapter for
+ *  detect/confirm.ts's handleNewBlock -- ConfirmElectrumRail's shape
+ *  (getHistory/getMerkleProof/getBlockHeader/getTx) is a strict subset of
+ *  WatcherElectrumRail's, so one adapter instance satisfies both. */
+export function railFromNode(node: NodeClient): WatcherElectrumRail {
 	return {
 		getHistory: (sh) => node.electrum.getHistory(sh, 'background'),
 		getMerkleProof: (txid, height) => node.electrum.getMerkleProof(txid, height, 'background'),

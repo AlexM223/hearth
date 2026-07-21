@@ -20,6 +20,11 @@ import { initNodeClient } from '$lib/server/node/index.js';
 import { startBlockWatcher } from '$lib/server/node/watcher.js';
 import { startMempoolTicker } from '$lib/server/chain/index.js';
 import { initSecretKey } from '$lib/server/notify/config/secrets.js';
+import {
+	startWatchtowerService,
+	startNotificationQueueWorker,
+	initWatchtowerOrigin
+} from '$lib/server/notify/index.js';
 import { log } from '$lib/server/log.js';
 
 const config = loadConfig();
@@ -27,13 +32,19 @@ const db = openDb(config.dbPath);
 runMigrations(db);
 await bootstrapAdminFromEnv();
 // M6 watchtower: the instance secret-key file backing AES-256-GCM envelopes
-// for channel bearer secrets (WATCHTOWER.md §2.3). Idempotent; independent of
-// the watchtower detector/queue workers themselves (T8 wires those).
+// for channel bearer secrets (WATCHTOWER.md §2.3). Idempotent.
 initSecretKey(config.dataDir);
+initWatchtowerOrigin(config.origin);
 
 const nodeClient = initNodeClient(config.electrum, config.core);
 startBlockWatcher(nodeClient);
 startMempoolTicker(nodeClient);
+// M6 watchtower (T8): the SPV-gated detection service + confirmation/reorg
+// reconciliation, and the outbox drain worker for the five external
+// channels. Both best-effort and never throw (DECISIONS.md §4.9 invariant
+// 4, applied to notify).
+startWatchtowerService(nodeClient);
+startNotificationQueueWorker();
 
 log('boot', { phase: 'ready', platform: config.platform, dbPath: config.dbPath });
 

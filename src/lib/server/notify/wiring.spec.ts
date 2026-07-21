@@ -140,4 +140,41 @@ describe('T3: end-to-end -- verified detection fires exactly one notification', 
 		expect(formatBtc(100000000)).toBe('1.0');
 		expect(formatBtc(1)).toBe('0.00000001');
 	});
+
+	it('a receive crossing the configured tx_large threshold fires BOTH tx_received and tx_large', async () => {
+		const { setPreference } = await import('./config/prefs.js');
+		setPreference(userId, 'tx_large', 'inapp', true, { thresholdSats: 100000 }); // 0.0015 BTC (150000 sats) crosses this
+
+		const state = createWatcherState();
+		state.baselineComplete = true;
+		state.byScripthash.set(sh0, { walletId: wallet.id, userId, chain: 0, index: 0, address: '' });
+		state.baselinedScripthashes.add(sh0);
+		state.floor.acceptHeader(V.height, V.headerHex);
+
+		const rail: WatcherElectrumRail = {
+			async getHistory() {
+				return [{ tx_hash: V.txid, height: V.height }];
+			},
+			async getMerkleProof() {
+				return { merkle: V.merkle, pos: V.pos };
+			},
+			async getBlockHeader() {
+				return V.headerHex;
+			},
+			async subscribeScripthash() {
+				return null;
+			},
+			async unsubscribeScripthash() {
+				return true;
+			},
+			async getTx() {
+				return { vout: [{ n: 0, value: 0.0015, scriptPubKey: { hex: spk0 } }] };
+			}
+		};
+
+		await handleScripthashChange(state, rail, sh0, createWatchtowerHooks());
+
+		const rows = getDb().prepare('SELECT type FROM events ORDER BY id').all() as { type: string }[];
+		expect(rows.map((r) => r.type)).toEqual(['tx_received', 'tx_large']);
+	});
 });

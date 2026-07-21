@@ -10,6 +10,13 @@
 import { getDb } from '../db/index.js';
 import { publish } from '../events/index.js';
 import { logWarn } from '../log.js';
+import type { NodeClient } from '../node/index.js';
+import { startWatchtower, railFromNode } from './detect/watcher.js';
+import { handleNewBlock } from './detect/confirm.js';
+import { createWatchtowerHooks, createConfirmHooks } from './wiring.js';
+import { startOutboxWorker, type OutboxWorker } from './queue/outbox.js';
+import { CHANNELS } from './channels/index.js';
+import { initNotifyOrigin } from './config/channelConfig.js';
 
 export type NotifyChannel = 'email' | 'telegram' | 'ntfy' | 'nostr' | 'webhook';
 
@@ -94,4 +101,54 @@ export function notify(input: NotifyInput): void {
 
 function toRecord(v: unknown): Record<string, unknown> {
 	return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : { value: v };
+}
+
+// ------------------------------------------------------------------ T8: boot
+
+export interface WatchtowerService {
+	stop(): void;
+}
+
+/**
+ * Starts the FULL watchtower (T8's hooks.server.ts wiring): the detection
+ * service (WATCHTOWER.md §1, T1) attached to the shared Electrum pool's
+ * 'scripthash' events, PLUS confirmation-milestone/reorg reconciliation
+ * (T2) on every 'header' event, both wired to the real dispatch pipeline
+ * (T3's dispatch/feed, T5's rendering via wiring.ts, T7's per-user routing).
+ * One shared ConfirmElectrumRail/DifficultyFloor instance -- confirm.ts
+ * never opens a second Electrum subscription. Best-effort; never throws.
+ */
+export function startWatchtowerService(node: NodeClient): WatchtowerService {
+	const rail = railFromNode(node);
+	const watchtower = startWatchtower(node, createWatchtowerHooks());
+	const confirmHooks = createConfirmHooks();
+
+	const onHeader = (): void => {
+		void handleNewBlock(rail, watchtower.state.floor, watchtower.state.baselineComplete, confirmHooks).catch(
+			(e: unknown) => {
+				logWarn('watchtower', { event: 'header_triggered_confirm_pass_failed', err: String(e) });
+			}
+		);
+	};
+	node.electrum.on('header', onHeader);
+
+	return {
+		stop() {
+			node.electrum.off('header', onHeader);
+			watchtower.stop();
+		}
+	};
+}
+
+/** Starts the outbox drain worker (T4) wired to the real channel registry
+ *  (T6). Idempotent per call -- hooks.server.ts calls this once at boot. */
+export function startNotificationQueueWorker(): OutboxWorker {
+	return startOutboxWorker({ channels: CHANNELS });
+}
+
+/** HEARTH_ORIGIN (DECISIONS.md §5.3) -- set once at boot so render.ts's
+ *  absoluteNotificationLink can resolve a relative deep-link for every
+ *  out-of-app channel. */
+export function initWatchtowerOrigin(origin: string | null): void {
+	initNotifyOrigin(origin);
 }

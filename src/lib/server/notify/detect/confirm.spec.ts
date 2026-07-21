@@ -304,4 +304,27 @@ describe('T2: reorg reconciliation (WATCHTOWER.md §1.6.1)', () => {
 	it('DEFAULT_MILESTONES is [1] (matching cairn, avoiding fatigue)', () => {
 		expect(DEFAULT_MILESTONES).toEqual([1]);
 	});
+
+	// Regression: Bitcoin Core commonly restores an invalidated block's
+	// transactions straight back into the mempool rather than making them
+	// unfetchable -- getTx keeps succeeding (confirmations drops to 0/absent)
+	// with NO throw at all. Relying only on a "not found" throw would miss
+	// this, the most common real-world reorg shape (confirmed by the
+	// watchtower regtest e2e test).
+	it('a tx reorged BACK INTO MEMPOOL (still fetchable, confirmations dropped below threshold, no throw) still fires tx_replaced', async () => {
+		withTransaction((db) => claimReceived(db, wallet.id, userId, V.txid, 150000, V.height));
+		const replacedEvents: ReplacedEvent[] = [];
+		const rail = fakeRail({
+			async getTx() {
+				return { confirmations: 0 }; // fetchable, but no longer confirmed -- no throw
+			},
+			async getHistory() {
+				return [{ tx_hash: V.txid, height: 0 }]; // back in mempool, not confirmed
+			}
+		});
+		await handleNewBlock(rail, floorAtTip(), true, { afterReplaced: (e) => replacedEvents.push(e) });
+		expect(replacedEvents.length).toBe(1);
+		expect(replacedEvents[0].wasConfirmed).toBe(true);
+		expect(getLedgerRow(wallet.id, userId, V.txid)?.status).toBe('replaced');
+	});
 });
