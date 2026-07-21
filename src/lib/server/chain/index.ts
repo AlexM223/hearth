@@ -30,7 +30,16 @@ export type {
 export type { Richness as ExplorerRichness } from './types.js';
 
 export { classifySearch, HEIGHT_RE, HEX64_RE, type SearchNode } from './search.js';
-export { isDecodableAddress } from './address.js';
+export {
+	isDecodableAddress,
+	getAddressView,
+	getAddressTxPage,
+	ADDR_DETAIL_CAP,
+	ADDR_PREVOUT_CAP,
+	type AddressNode,
+	type AddressElectrumRail,
+	type AddressCoreRail
+} from './address.js';
 export {
 	getBlockDetail,
 	getBlockTxPage,
