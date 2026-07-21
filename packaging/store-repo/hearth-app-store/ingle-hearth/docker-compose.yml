@@ -12,7 +12,7 @@ services:
     # Pinned to the multi-arch (linux/amd64 + linux/arm64) manifest-list
     # digest pushed by the Hearth repo's release workflow. Verify with:
     #   docker buildx imagetools inspect ghcr.io/alexm223/hearth:0.1.0
-    image: ghcr.io/alexm223/hearth:0.1.0@sha256:<to-fill-after-push>
+    image: ghcr.io/alexm223/hearth:0.1.0@sha256:7d6a475102c69b7e90300c85e950081de923b6dcc2c7c9db1a1edcdf24e903e4
     restart: on-failure
     stop_grace_period: 1m
     init: true
