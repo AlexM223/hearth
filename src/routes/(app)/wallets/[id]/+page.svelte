@@ -25,6 +25,39 @@
 		if (res.ok) receiveAddress = (await res.json()).address;
 	}
 
+	// Receive: QR + copy (UX sweep hearth-4yh) -- air-gap/mobile-wallet
+	// scanning is core to the product thesis (DECISIONS.md §2/§4.2). `qrcode`
+	// is a devDependency (see src/lib/hw/devdep-placement.spec.ts) rendered
+	// only client-side via a lazy dynamic import, the same pattern
+	// SignWithQr.svelte already uses for its BC-UR "Show" QR -- this keeps it
+	// out of the server bundle.
+	let receiveQrUrl = $state<string | null>(null);
+	let receiveCopied = $state(false);
+
+	async function buildReceiveQr(address: string) {
+		try {
+			const QRCode = await import('qrcode');
+			receiveQrUrl = await QRCode.toDataURL(`bitcoin:${address}`, { margin: 1, width: 220 });
+		} catch {
+			receiveQrUrl = null; // no QR is a degrade, never a crash -- the address text still works
+		}
+	}
+
+	$effect(() => {
+		if (tab === 'receive' && receiveAddress) void buildReceiveQr(receiveAddress);
+	});
+
+	async function copyReceiveAddress() {
+		if (!receiveAddress) return;
+		try {
+			await navigator.clipboard.writeText(receiveAddress);
+			receiveCopied = true;
+			setTimeout(() => (receiveCopied = false), 1500);
+		} catch {
+			// not fatal -- no clipboard permission; the address is still selectable text
+		}
+	}
+
 	// ---- send flow state
 	let toAddress = $state('');
 	let amount = $state('');
@@ -200,7 +233,15 @@
 {:else if tab === 'receive'}
 	<section class="panel receive">
 		<p class="t-micro">Receive address</p>
-		<p class="addr mono">{receiveAddress ?? '—'}</p>
+		{#if receiveQrUrl}
+			<img class="qr" src={receiveQrUrl} alt={`QR code for ${receiveAddress}`} width="220" height="220" />
+		{/if}
+		<div class="addr-row">
+			<p class="addr mono">{receiveAddress ?? '—'}</p>
+			<button class="copy-btn t-label" type="button" onclick={copyReceiveAddress}>
+				{receiveCopied ? 'Copied' : 'Copy'}
+			</button>
+		</div>
 		<button class="btn-primary secondary" type="button" onclick={rotateReceive}>New address</button>
 	</section>
 {:else}
@@ -405,13 +446,44 @@
 	.conf {
 		color: var(--text-muted);
 	}
+	.qr {
+		display: block;
+		width: 220px;
+		height: 220px;
+		max-width: 100%;
+		margin: var(--space-2) 0;
+		border-radius: var(--radius-input);
+		background: #fff;
+		padding: 12px;
+	}
+	.addr-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin: var(--space-2) 0 var(--space-3);
+	}
 	.addr {
+		flex: 1;
+		min-width: 0;
 		font-family: var(--font-mono, ui-monospace, monospace);
 		word-break: break-all;
 		background: var(--bg-input);
 		padding: 12px;
 		border-radius: var(--radius-input);
-		margin: var(--space-2) 0 var(--space-3);
+		margin: 0;
+	}
+	.copy-btn {
+		flex-shrink: 0;
+		background: none;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-pill);
+		padding: 6px 14px;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+	.copy-btn:hover {
+		color: var(--text);
+		border-color: var(--border);
 	}
 	.field {
 		display: block;
