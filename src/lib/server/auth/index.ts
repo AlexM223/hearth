@@ -43,3 +43,6 @@ export {
 	hasBeenWelcomed,
 	markWelcomed
 } from './household.js';
+
+export { API_POLICY, resolveApiPolicy, type MinRole, type Rule } from './policy.js';
+export { roleAtLeast, requireRole, requireWalletAccess } from './guard.js';
