@@ -32,9 +32,11 @@
 
 		<div class="topnav-actions">
 			<span class="badge-no-cloud">No cloud &middot; No telemetry</span>
-			<a href="/settings" class:active={isActive('/settings')} class="settings-link" title="Settings"
-				>Settings</a
-			>
+			{#if data.user?.role === 'owner'}
+				<a href="/settings" class:active={isActive('/settings')} class="settings-link" title="Settings"
+					>Settings</a
+				>
+			{/if}
 			{#if data.user}
 				<span class="username t-label">{data.user.username}</span>
 				<form method="POST" action="/logout">

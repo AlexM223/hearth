@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatSats } from '$lib/format.js';
 	import type { PageProps } from './$types';
 
 	// Home = the hearth (DECISIONS.md §4.2): live tip height, plain-language
-	// node health, and the watchtower feed. The wallet balance stays a
-	// placeholder until the ONE unified engine lands in M2.
+	// node health, the watchtower feed, and the first-30-seconds choreography
+	// (COME-ABOARD.md §2.5). Owner/Member hero is their own wallet balance;
+	// a Guest (or a fresh Member with no wallet yet) sees the aboard message.
 
 	let { data }: PageProps = $props();
+
+	let welcomeDismissed = $state(false);
+	let showWelcome = $derived(data.showWelcome && !welcomeDismissed);
 
 	// Live overrides from the SSE `block` topic, layered on top of the
 	// server-rendered snapshot via $derived below -- never captured once at
@@ -48,15 +53,48 @@
 	}
 </script>
 
+{#if showWelcome}
+	<section class="panel welcome hairline">
+		<p class="t-label welcome-text">
+			{#if data.user?.role === 'guest'}
+				Welcome aboard, {data.user?.username}. You've got a read-only seat by the fire — here's the
+				shared view.
+			{:else}
+				Welcome aboard, {data.user?.username}. Add your wallet to start watching your money — you
+				keep the keys, this node keeps watch.
+			{/if}
+		</p>
+		<form method="POST" action="?/dismissWelcome" onsubmit={() => (welcomeDismissed = true)}>
+			<button class="dismiss" type="submit" aria-label="Dismiss">&times;</button>
+		</form>
+	</section>
+{/if}
+
 <section class="hero panel">
 	<p class="t-micro">The hearth</p>
-	<p class="t-hero">0.00000000 <span class="unit">BTC</span></p>
-	<p class="status t-label">Come navigate Bitcoin with me.</p>
+	{#if data.heroKind === 'aboard'}
+		<p class="t-hero aboard">You're aboard {data.captain}'s node</p>
+		<p class="status t-label">Come navigate Bitcoin with me.</p>
+	{:else}
+		<p class="t-hero">
+			{formatSats(data.ownBalance.confirmedSats)} <span class="unit">sats</span>
+		</p>
+		{#if data.ownBalance.unconfirmedSats > 0}
+			<p class="pending t-label">+{formatSats(data.ownBalance.unconfirmedSats)} pending</p>
+		{/if}
+		<p class="status t-label">Come navigate Bitcoin with me.</p>
+	{/if}
 
-	<div class="actions">
-		<button class="btn-primary" type="button" disabled>Send</button>
-		<button class="btn-primary secondary" type="button" disabled>Receive</button>
-	</div>
+	{#if data.heroKind === 'aboard' && data.user?.role === 'member'}
+		<div class="actions">
+			<a class="btn-primary" href="/wallets">Add your wallet</a>
+		</div>
+	{:else if data.user?.role !== 'guest'}
+		<div class="actions">
+			<a class="btn-primary" href="/wallets">Send</a>
+			<a class="btn-primary secondary" href="/wallets">Receive</a>
+		</div>
+	{/if}
 </section>
 
 <section class="health panel">
@@ -88,6 +126,38 @@
 </section>
 
 <style>
+	.welcome {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-bottom: var(--space-3);
+		background: var(--surface-elevated);
+	}
+
+	.welcome-text {
+		color: var(--text);
+		margin: 0;
+	}
+
+	.welcome form {
+		margin: 0;
+	}
+
+	.dismiss {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 18px;
+		line-height: 1;
+		cursor: pointer;
+		padding: 4px 6px;
+	}
+
+	.dismiss:hover {
+		color: var(--text);
+	}
+
 	.hero {
 		text-align: center;
 		margin-bottom: var(--space-4);
@@ -100,6 +170,11 @@
 		vertical-align: middle;
 	}
 
+	.aboard {
+		font-size: 32px;
+		line-height: 1.3;
+	}
+
 	.status {
 		margin-top: var(--space-1);
 	}
@@ -109,6 +184,10 @@
 		justify-content: center;
 		gap: var(--space-2);
 		margin-top: var(--space-4);
+	}
+
+	.actions a {
+		text-decoration: none;
 	}
 
 	.secondary {
