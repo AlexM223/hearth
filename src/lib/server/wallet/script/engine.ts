@@ -139,3 +139,43 @@ export function shortReason(e: unknown): string {
 	const msg = e instanceof Error ? e.message : String(e);
 	return msg.split('\n')[0].slice(0, 200);
 }
+
+/** Order-sensitive canonical key for a parsed PSBT's inputs (outpoint list). */
+export function inputsIdentity(tx: btc.Transaction): string {
+	const parts: string[] = [];
+	for (let i = 0; i < tx.inputsLength; i++) {
+		const inp = tx.getInput(i);
+		const txid = inp.txid ? base16(inp.txid) : '';
+		parts.push(`${txid}:${inp.index ?? ''}`);
+	}
+	return parts.join(',');
+}
+
+/** Order-sensitive canonical key for a parsed PSBT's outputs (script:amount list). */
+export function outputsIdentity(tx: btc.Transaction): string {
+	const parts: string[] = [];
+	for (let i = 0; i < tx.outputsLength; i++) {
+		const out = tx.getOutput(i) as { script?: Uint8Array; amount?: bigint };
+		const script = out.script ? base16(out.script) : '';
+		parts.push(`${script}:${out.amount ?? ''}`);
+	}
+	return parts.join(',');
+}
+
+/** Do two parsed PSBTs describe the SAME transaction (same inputs + outputs,
+ *  order-sensitive)? Signing never changes these fields, so a difference is
+ *  tampering / a different tx (WALLET-ENGINE §4.9 invariant 2, §5.2). */
+export function samePsbtIdentity(a: btc.Transaction, b: btc.Transaction): boolean {
+	return (
+		a.inputsLength === b.inputsLength &&
+		a.outputsLength === b.outputsLength &&
+		inputsIdentity(a) === inputsIdentity(b) &&
+		outputsIdentity(a) === outputsIdentity(b)
+	);
+}
+
+function base16(u8: Uint8Array): string {
+	let s = '';
+	for (let i = 0; i < u8.length; i++) s += u8[i].toString(16).padStart(2, '0');
+	return s;
+}
