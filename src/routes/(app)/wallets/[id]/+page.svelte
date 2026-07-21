@@ -184,12 +184,14 @@
 		{:else}
 			<ul class="tx-list">
 				{#each data.history as tx (tx.txid)}
-					<li class="hairline tx">
-						<span class="amt" class:recv={tx.deltaSats > 0}>
-							{tx.deltaSats > 0 ? '+' : ''}{fmtSats(tx.deltaSats)}
-						</span>
-						<span class="txid t-label">{tx.txid.slice(0, 12)}…</span>
-						<span class="conf t-label">{tx.height > 0 ? `block ${fmtSats(tx.height)}` : 'unconfirmed'}</span>
+					<li class="hairline">
+						<a class="tx" href={`/explorer/tx/${tx.txid}`}>
+							<span class="amt" class:recv={tx.deltaSats > 0}>
+								{tx.deltaSats > 0 ? '+' : ''}{fmtSats(tx.deltaSats)}
+							</span>
+							<span class="txid t-label">{tx.txid.slice(0, 12)}…</span>
+							<span class="conf t-label">{tx.height > 0 ? `block ${fmtSats(tx.height)}` : 'unconfirmed'}</span>
+						</a>
 					</li>
 				{/each}
 			</ul>
@@ -381,6 +383,11 @@
 		padding: 10px 0;
 		flex-wrap: wrap;
 		row-gap: 4px;
+		text-decoration: none;
+		color: var(--text);
+	}
+	.tx:hover {
+		color: var(--accent);
 	}
 	.amt {
 		font-variant-numeric: tabular-nums;
