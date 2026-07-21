@@ -56,3 +56,11 @@ export {
 	MAX_SPENT_CHECK_OUTPUTS,
 	type TxNode
 } from './tx.js';
+export {
+	getMempoolSummary,
+	getFeeHistogram,
+	type MempoolCoreRail,
+	type MempoolElectrumRail,
+	type FeeHistogramResult
+} from './mempool.js';
+export { getFeeRecommendation, type FeesNode, type FeesElectrumRail } from './fees.js';
