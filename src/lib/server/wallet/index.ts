@@ -122,6 +122,12 @@ export {
 	parseDescriptor,
 	type ImportInput
 } from './import.js';
+export {
+	listAllWalletRows,
+	getWalletRowUnscoped,
+	highestUsedIndex,
+	listWalletScriptPubKeys
+} from './repo.js';
 
 export {
 	syncWallet,
@@ -133,7 +139,7 @@ export {
 	type SyncNode,
 	type WalletSnapshot
 } from './sync.js';
-export { scanWallet, type ScanRail, type ScanResult } from './scan.js';
+export { scanWallet, GAP_LIMIT, type ScanRail, type ScanResult } from './scan.js';
 
 export {
 	buildPsbt,
@@ -145,7 +151,15 @@ export {
 } from './psbt.js';
 export { broadcastDraft, type BroadcastNode, type BroadcastResult } from './broadcast.js';
 export { listDraftRows as listDrafts, getDraftRow as getDraft } from './repo.js';
-export { verifyTxInclusion, bitsToTarget, type SpvResult, type TxInclusionInput } from './spv.js';
+export {
+	verifyTxInclusion,
+	bitsToTarget,
+	parseBlockHeader,
+	meetsTarget,
+	type SpvResult,
+	type TxInclusionInput,
+	type ParsedBlockHeader
+} from './spv.js';
 export { confirmDraft, type ConfirmNode } from './confirm.js';
 export {
 	selectCoins,

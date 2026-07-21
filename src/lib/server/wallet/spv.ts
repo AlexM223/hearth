@@ -58,6 +58,7 @@ export function bitsToTarget(bits: number): bigint {
 interface ParsedHeader {
 	merkleRoot: Uint8Array; // internal order
 	bits: number;
+	hashInternal: Uint8Array; // internal order, 32 bytes
 	hashLE: bigint; // block hash as a little-endian integer (for PoW compare)
 }
 
@@ -73,7 +74,40 @@ function parseHeader(headerHex: string): ParsedHeader | null {
 	const bits =
 		bytes[72] | (bytes[73] << 8) | (bytes[74] << 16) | (bytes[75] << 24); // LE uint32
 	const hash = sha256d(bytes); // internal order
-	return { merkleRoot, bits: bits >>> 0, hashLE: leBytesToBigInt(hash) };
+	return { merkleRoot, bits: bits >>> 0, hashInternal: hash, hashLE: leBytesToBigInt(hash) };
+}
+
+/**
+ * Header fields needed OUTSIDE this module -- specifically notify/detect/
+ * difficulty.ts's self-calibrating tipCache floor (WATCHTOWER.md §1.3),
+ * which must reuse this module's header parsing/PoW check rather than
+ * re-implement it (DECISIONS.md §4.9 invariant 3: ONE SPV implementation;
+ * WATCHTOWER.md §0.3's reuse boundary, enforced by
+ * notify/spvSingleSource.spec.ts).
+ */
+export interface ParsedBlockHeader {
+	bits: number;
+	/** Display-order block hash, hex (the form Electrum/explorers/tests use). */
+	hash: string;
+}
+
+/** Parse an 80-byte header hex into its externally-useful fields. Returns
+ *  null on anything unparseable -- callers must treat that as fail-closed
+ *  (a hostile/garbled header is never a hash to trust). */
+export function parseBlockHeader(headerHex: string): ParsedBlockHeader | null {
+	const header = parseHeader(headerHex);
+	if (!header) return null;
+	return { bits: header.bits, hash: hex.encode(reverse(header.hashInternal)) };
+}
+
+/** True only when the header's own hash satisfies its own `bits` target --
+ *  SELF-consistency only (an easy `bits` value still passes; that is what
+ *  the difficulty floor in verifyTxInclusion/notify's tipCache is for). */
+export function meetsTarget(headerHex: string): boolean {
+	const header = parseHeader(headerHex);
+	if (!header) return false;
+	const target = bitsToTarget(header.bits);
+	return target !== 0n && header.hashLE <= target;
 }
 
 /** Recompute the merkle root from a tx (display-order txid) + Electrum branch. */

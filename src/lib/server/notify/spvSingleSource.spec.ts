@@ -37,15 +37,19 @@ function listSourceFiles(dir: string): string[] {
 const RESERVED_PRIMITIVE_NAMES = [
 	'verifyTxInclusion',
 	'bitsToTarget',
+	'parseBlockHeader',
+	'meetsTarget',
 	'computeMerkleRoot',
 	'parseHeader',
 	'sha256d'
 ];
 
-describe('T0: SPV is reused from wallet/, never re-implemented in notify/', () => {
-	it('wallet/index.ts re-exports verifyTxInclusion + bitsToTarget (the reuse boundary is reachable)', () => {
+describe('T0/T1: SPV is reused from wallet/, never re-implemented in notify/', () => {
+	it('wallet/index.ts re-exports verifyTxInclusion + bitsToTarget + parseBlockHeader + meetsTarget (the reuse boundary is reachable)', () => {
 		expect(typeof walletSurface.verifyTxInclusion).toBe('function');
 		expect(typeof walletSurface.bitsToTarget).toBe('function');
+		expect(typeof walletSurface.parseBlockHeader).toBe('function');
+		expect(typeof walletSurface.meetsTarget).toBe('function');
 	});
 
 	it('no file under notify/** defines a merkle/PoW primitive of its own', () => {

@@ -184,6 +184,42 @@ export function listWalletRows(userId: number): Wallet[] {
 	return rows.map((row) => hydrateWallet(row, loadKeys(db, row.id)));
 }
 
+/** Highest used address_index on a chain, or -1 if none used (matching
+ *  scan.ts's `lastUsedIndex` convention) -- the watchtower's enumeration pass
+ *  (WATCHTOWER.md §1.0 `watchDepthFor`) needs this without re-deriving or
+ *  re-scanning; the persisted `addresses` table (scan.ts's own write) is
+ *  already the authoritative "was this address ever used" record. */
+export function highestUsedIndex(walletId: number, chain: 0 | 1): number {
+	const row = getDb()
+		.prepare(
+			`SELECT MAX(address_index) AS m FROM addresses WHERE wallet_id = ? AND chain = ? AND used = 1`
+		)
+		.get(walletId, chain) as { m: number | null };
+	return row.m ?? -1;
+}
+
+/** Every persisted scriptPubKey (lowercase hex) for a wallet's addresses --
+ *  the watchtower's direction test (WATCHTOWER.md §1.4: distinguish inbound
+ *  credit from a spend by scriptPubKey membership, never an address string).
+ *  Reads the same `addresses` rows scan.ts already populated; never
+ *  re-derives (derivation lives in wallet/ only). */
+export function listWalletScriptPubKeys(walletId: number): string[] {
+	const rows = getDb()
+		.prepare('SELECT DISTINCT script_pubkey FROM addresses WHERE wallet_id = ?')
+		.all(walletId) as unknown as { script_pubkey: string }[];
+	return rows.map((r) => r.script_pubkey.toLowerCase());
+}
+
+/** EVERY wallet, across every user -- for the watchtower's enumeration pass
+ *  (WATCHTOWER.md §1.0), which must cover every user's wallets independent of
+ *  whether a wallet page has ever been visited. Internal engine use only
+ *  (never role-scoped) -- the watchtower is a background service, not a route. */
+export function listAllWalletRows(): Wallet[] {
+	const db = getDb();
+	const rows = db.prepare('SELECT * FROM wallets ORDER BY id ASC').all() as unknown as WalletRow[];
+	return rows.map((row) => hydrateWallet(row, loadKeys(db, row.id)));
+}
+
 export function deleteWalletRow(userId: number, walletId: number): boolean {
 	const db = getDb();
 	const res = db.prepare('DELETE FROM wallets WHERE id = ? AND user_id = ?').run(walletId, userId);

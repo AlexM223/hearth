@@ -5,7 +5,9 @@
  * bad-pow) cases REFUSE. Detection fails closed -- never a false positive.
  */
 import { describe, expect, it } from 'vitest';
-import { verifyTxInclusion, bitsToTarget } from './spv.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { hex } from '@scure/base';
+import { verifyTxInclusion, bitsToTarget, parseBlockHeader, meetsTarget } from './spv.js';
 
 // Real vector from Bitcoin Core + Fulcrum (block 700000, tx at pos 1).
 const V = {
@@ -73,5 +75,48 @@ describe('T9: SPV tx-inclusion (real block-700000 vector)', () => {
 	it('bitsToTarget decodes the nBits compact form', () => {
 		// 0x1d00ffff (genesis difficulty) -> 0x00ffff * 256^(0x1d-3).
 		expect(bitsToTarget(0x1d00ffff)).toBe(0x00ffffn << (8n * BigInt(0x1d - 3)));
+	});
+});
+
+// T1 acceptance (WATCHTOWER.md §0.3, §1.3): notify/detect/difficulty.ts's
+// tipCache floor reuses these two exports rather than re-implementing header
+// parsing/PoW checks. Verified here against the SAME real block-700000
+// header, cross-checked with an INDEPENDENT sha256d computed straight from
+// @noble/hashes (not by calling anything internal to spv.ts).
+describe('T1: parseBlockHeader + meetsTarget (reused by notify/detect/difficulty.ts)', () => {
+	function independentBlockHash(headerHex: string): string {
+		const bytes = hex.decode(headerHex);
+		const once = sha256(bytes);
+		const twice = sha256(once);
+		return hex.encode(twice.slice().reverse()); // display order
+	}
+
+	it('parseBlockHeader returns the header bits and the display-order hash', () => {
+		const parsed = parseBlockHeader(V.headerHex);
+		expect(parsed).not.toBeNull();
+		expect(parsed!.hash).toBe(independentBlockHash(V.headerHex));
+		// bits is the raw nBits field this header carries -- cross-check via
+		// bitsToTarget agreeing with verifyTxInclusion's own self-consistency pass.
+		expect(bitsToTarget(parsed!.bits) > 0n).toBe(true);
+	});
+
+	it('parseBlockHeader returns null on a malformed header', () => {
+		expect(parseBlockHeader('deadbeef')).toBeNull();
+	});
+
+	it('meetsTarget is true for the real PoW-valid header', () => {
+		expect(meetsTarget(V.headerHex)).toBe(true);
+	});
+
+	it('meetsTarget is false for a malformed header', () => {
+		expect(meetsTarget('deadbeef')).toBe(false);
+	});
+
+	it('meetsTarget is false when the hash does not satisfy its own bits (tampered header)', () => {
+		// Flip a byte in the middle of the header (inside the nonce field) so the
+		// hash changes but bits stays the same -- self-consistency must now fail.
+		const bytes = hex.decode(V.headerHex);
+		bytes[76] ^= 0xff;
+		expect(meetsTarget(hex.encode(bytes))).toBe(false);
 	});
 });
