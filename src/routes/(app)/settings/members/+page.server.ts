@@ -13,7 +13,11 @@ import {
 	listInvites,
 	revokeInvite,
 	InviteError,
-	type WalletBalanceReader
+	changeMemberRole,
+	offboardMember,
+	MemberError,
+	type WalletBalanceReader,
+	type OffboardWalletPolicy
 } from '$lib/server/auth/index.js';
 import { listWallets, getSnapshot } from '$lib/server/wallet/index.js';
 import type { Actions, PageServerLoad } from './$types';
@@ -81,5 +85,33 @@ export const actions: Actions = {
 		if (!Number.isInteger(id)) return fail(400, { error: 'invalid invite id' });
 		revokeInvite(id);
 		return {};
+	},
+
+	changeRole: async ({ request }) => {
+		const data = await request.formData();
+		const id = Number(data.get('id'));
+		const role = String(data.get('role') ?? '');
+		if (!Number.isInteger(id)) return fail(400, { error: 'invalid member id' });
+		try {
+			changeMemberRole(id, role);
+			return {};
+		} catch (e) {
+			if (e instanceof MemberError) return fail(e.code === 'last_owner' ? 409 : 400, { error: e.message });
+			throw e;
+		}
+	},
+
+	offboard: async ({ request, locals }) => {
+		const data = await request.formData();
+		const id = Number(data.get('id'));
+		const walletPolicy = (data.get('walletPolicy') === 'transfer' ? 'transfer' : 'remove') as OffboardWalletPolicy;
+		if (!Number.isInteger(id)) return fail(400, { error: 'invalid member id' });
+		try {
+			offboardMember(locals.user!.id, id, walletPolicy);
+			return {};
+		} catch (e) {
+			if (e instanceof MemberError) return fail(e.code === 'last_owner' ? 409 : 400, { error: e.message });
+			throw e;
+		}
 	}
 };

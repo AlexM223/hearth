@@ -60,9 +60,31 @@
 				<span class="t-label muted provenance"
 					>{m.invitedByUsername ? `invited by ${m.invitedByUsername}` : '—'}</span
 				>
+
+				<form method="POST" action="?/changeRole" class="row-form">
+					<input type="hidden" name="id" value={m.id} />
+					<select class="input small" name="role">
+						<option value="owner" selected={m.role === 'owner'}>Owner</option>
+						<option value="member" selected={m.role === 'member'}>Member</option>
+						<option value="guest" selected={m.role === 'guest'}>Guest</option>
+					</select>
+					<button class="link-btn t-label" type="submit">Save role</button>
+				</form>
+
+				{#if m.id !== data.ownUserId}
+					<form method="POST" action="?/offboard" class="row-form">
+						<input type="hidden" name="id" value={m.id} />
+						<select class="input small" name="walletPolicy">
+							<option value="remove">Remove wallets</option>
+							<option value="transfer">Keep wallets (transfer to me)</option>
+						</select>
+						<button class="link-btn danger t-label" type="submit">Offboard</button>
+					</form>
+				{/if}
 			</li>
 		{/each}
 	</ul>
+	{#if form?.error}<p class="err t-label">{form.error}</p>{/if}
 </section>
 
 <section class="panel invite-create">
@@ -194,6 +216,19 @@
 	}
 	.provenance {
 		margin-left: auto;
+	}
+	.row-form {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.input.small {
+		width: auto;
+		padding: 6px 8px;
+		font-size: var(--t-label);
+	}
+	.danger:hover {
+		color: var(--error);
 	}
 	.pill {
 		font-size: var(--t-label);
