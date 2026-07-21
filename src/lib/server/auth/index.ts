@@ -35,3 +35,11 @@ export {
 	completeForcedCredentialReset,
 	type AuthUser
 } from './users.js';
+
+export {
+	householdGreetingName,
+	setHouseholdName,
+	getHouseholdNameSetting,
+	hasBeenWelcomed,
+	markWelcomed
+} from './household.js';

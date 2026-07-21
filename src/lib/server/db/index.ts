@@ -4,3 +4,4 @@
  */
 export { openDb, getDb, closeDb, withTransaction } from './client.js';
 export { runMigrations, listMigrations, type Migration } from './migrations.js';
+export { getMeta, setMeta, deleteMeta } from './meta.js';
