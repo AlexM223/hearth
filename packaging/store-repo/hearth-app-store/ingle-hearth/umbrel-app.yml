@@ -4,10 +4,8 @@ id: ingle-hearth
 # is expected as a real hosted URL (the official-store skill's "omit icon"
 # rule is specific to getumbrel/umbrel-apps, which hosts icons separately --
 # confirmed against getumbrel/umbrel-community-app-store's own template app,
-# which sets `icon:` to a real image URL). Not yet real: no icon asset has
-# been designed. Placeholder points at where it will live once this repo is
-# pushed and a real 256x256 icon (matching the umbrel-apps-gallery icon.svg
-# convention: square, 256x256) is committed alongside this file.
+# which sets `icon:` to a real image URL). icon.svg sits alongside this file
+# in the store repo: a 256x256 scale-up of the app's own favicon flame.
 icon: https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/icon.svg
 category: bitcoin
 name: Hearth
@@ -71,9 +69,10 @@ port: 3252
 # Community-store convention: gallery entries are full hosted image URLs,
 # not bare filenames resolved from a separate assets repo (confirmed against
 # getumbrel/umbrel-community-app-store's template, which uses full imgur
-# URLs). Not yet real, same as `icon:` above -- these point at where the
-# five screenshots (packaging/umbrel/hearth/GALLERY.md's shot list) will
-# live once captured and committed to this repo.
+# URLs). The five JPEGs live alongside this file (1440x900, captured per
+# packaging/umbrel/hearth/GALLERY.md's shot list against a live instance
+# wired to a real node; shot 4 shows the mining dashboard's honest
+# off-state and is worth recapturing with a live regtest worker later).
 gallery:
   - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/1.jpg
   - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/2.jpg
@@ -81,7 +80,11 @@ gallery:
   - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/4.jpg
   - https://raw.githubusercontent.com/AlexM223/hearth-app-store/master/ingle-hearth/5.jpg
 path: ""
-defaultUsername: "admin@hearth.local"
+# The literal bootstrap username auth/users.ts creates on first run -- NOT an
+# email-shaped placeholder. Verified against a real first-boot: logging in
+# with anything else fails (caught live when "admin@hearth.local" was
+# advertised here; the app's bootstrapAdminFromEnv inserts exactly 'admin').
+defaultUsername: "admin"
 deterministicPassword: true
 backupIgnore:
   - data/logs
