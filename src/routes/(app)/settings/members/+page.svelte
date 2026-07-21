@@ -28,6 +28,20 @@
 		busy = true;
 		setTimeout(() => (busy = false), 3000);
 	}
+
+	// "copy it now, it won't be shown again" needs an actual Copy button --
+	// select-on-click alone makes the ONE chance to copy a fiddly manual step.
+	let inviteCopied = $state(false);
+	async function copyInvite(url: string) {
+		try {
+			await navigator.clipboard.writeText(url);
+			inviteCopied = true;
+			setTimeout(() => (inviteCopied = false), 1500);
+		} catch {
+			// Clipboard can be unavailable (plain-HTTP LAN) -- the select-on-click
+			// input remains the fallback.
+		}
+	}
 </script>
 
 <svelte:head>
@@ -96,7 +110,16 @@
 			<p class="t-label ok">
 				Link created ({form.createdInvite.role}) — copy it now, it won't be shown again:
 			</p>
-			<input class="input mono" readonly value={form.createdInvite.url} onclick={(e) => (e.target as HTMLInputElement).select()} />
+			<div class="copy-row">
+				<input class="input mono" readonly value={form.createdInvite.url} onclick={(e) => (e.target as HTMLInputElement).select()} />
+				<button
+					class="btn-primary secondary copy-btn"
+					type="button"
+					onclick={() => copyInvite(form.createdInvite.url)}
+				>
+					{inviteCopied ? 'Copied' : 'Copy'}
+				</button>
+			</div>
 		</div>
 	{/if}
 	{#if form?.error}<p class="err t-label">{form.error}</p>{/if}
@@ -287,6 +310,18 @@
 	.created-link {
 		padding-bottom: var(--space-2);
 		margin-bottom: var(--space-2);
+	}
+	.copy-row {
+		display: flex;
+		gap: var(--space-2);
+		align-items: stretch;
+	}
+	.copy-row .input {
+		flex: 1;
+		min-width: 0;
+	}
+	.copy-btn {
+		flex-shrink: 0;
 	}
 	.ok {
 		color: var(--sage);
