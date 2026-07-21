@@ -27,6 +27,7 @@ import {
 	walletKeyIds,
 	getDraftRow,
 	updateDraftPsbt,
+	getDraftInputRows,
 	type NewDraft
 } from './repo.js';
 import { AlreadyReplacedError, CommitmentError, NotFoundError, WalletError } from './errors.js';
@@ -234,16 +235,28 @@ export function reviewSummary(userId: number, walletId: number, draftId: number)
 	const engine = selectEngine(wallet);
 
 	const tx = parsePsbt(draft.psbt);
+	// Authoritative per-input values (red-team review LOW-1): `psbt_draft_inputs`
+	// was recorded from the REAL selection at build time and is correct for
+	// every script type. Re-deriving from the PSBT's witnessUtxo (the previous
+	// approach) silently read 0 for legacy p2pkh/bare-p2sh inputs, which carry
+	// nonWitnessUtxo instead -- producing a bogus totalInputSats=0 and a
+	// negative changeAmountSats on this re-fetched review screen (the FIRST
+	// review, buildReviewFromSelection below, was never affected).
+	const authoritative = new Map(
+		getDraftInputRows(draftId).map((r) => [`${r.txid}:${r.vout}`, r.valueSats])
+	);
 	const inputs: ReviewSummary['inputs'] = [];
 	let totalInputSats = 0;
-	// Inputs come from the authoritative psbt_draft_inputs via the draft's stored
-	// input list is not on DraftRow; reconstruct value from the PSBT witnessUtxo.
 	for (let i = 0; i < tx.inputsLength; i++) {
 		const inp = tx.getInput(i);
 		const txid = inp.txid ? hex.encode(inp.txid) : '';
-		const valueSats = inp.witnessUtxo ? Number(inp.witnessUtxo.amount) : 0;
+		const vout = inp.index ?? 0;
+		const fromRow = authoritative.get(`${txid}:${vout}`);
+		// Fall back to witnessUtxo only if the authoritative row is somehow
+		// missing (should not happen -- defense in depth, never a silent 0).
+		const valueSats = fromRow ?? (inp.witnessUtxo ? Number(inp.witnessUtxo.amount) : 0);
 		totalInputSats += valueSats;
-		inputs.push({ txid, vout: inp.index ?? 0, valueSats, address: '' });
+		inputs.push({ txid, vout, valueSats, address: '' });
 	}
 
 	return {

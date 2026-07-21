@@ -8,8 +8,8 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb, closeDb } from '../db/index.js';
 import { runMigrations } from '../db/migrations.js';
-import { importWallet, syncWallet, getBalance, getUtxos, getSnapshot, getHistory } from './index.js';
-import { deriveAddresses } from './index.js';
+import { importWallet, syncWallet, getBalance, getUtxos, getSnapshot, getHistory, selectCoins } from './index.js';
+import { deriveAddresses, selectEngine } from './index.js';
 import { GAP_LIMIT, HARD_CAP, type ScanRail } from './scan.js';
 import { scriptToScripthash } from './derive.js';
 import { hex } from '@scure/base';
@@ -39,11 +39,18 @@ class FakeRail implements ScanRail {
 	async listUnspent(scripthash: string) {
 		return this.data.get(scripthash)?.utxos ?? [];
 	}
-	async getTransaction(txid: string) {
+	async getTransaction(txid: string): Promise<FakeVerboseTx> {
 		// Minimal verbose tx: one output paying nothing we can attribute (delta ok
 		// to be 0 for these balance-focused tests).
 		return { txid, vin: [], vout: [], blocktime: 1700000000 };
 	}
+}
+
+interface FakeVerboseTx {
+	txid: string;
+	vin: { coinbase?: string }[];
+	vout: unknown[];
+	blocktime: number;
 }
 
 let userId: number;
@@ -181,5 +188,134 @@ describe('T4: gap-limit scan + SWR', () => {
 		expect(history.length).toBe(1);
 		expect(history[0].txid).toBe(txid);
 		expect(history[0].height).toBe(750000); // from get_history, not a UTXO
+	});
+
+	// Regression (red-team money-path review, MED-1): scanWallet used to push
+	// EVERY utxo with a hardcoded `coinbase: false` and never actually refined
+	// it from the detailed tx, silently defeating select.ts's coinbase-maturity
+	// guard for exactly the case Hearth's own mining engine produces (a block
+	// reward paid straight into a user's wallet). This drives the REAL scanner
+	// path end to end (not a hand-built SpendableUtxo, which is what let the
+	// bug hide behind a passing select.spec.ts unit test).
+	describe('coinbase resolution (real scanner path)', () => {
+		it('flags a UTXO created by a real coinbase tx as coinbase:true', async () => {
+			const wallet = importWallet(userId, { name: 'W', xpub: ZPUB });
+			const sh0 = shOf(wallet, 0, 0);
+			const coinbaseTxid = 'ee'.repeat(32);
+			const data = new Map([
+				[
+					sh0,
+					{
+						history: [{ tx_hash: coinbaseTxid, height: 800000 }],
+						confirmed: 5000000000,
+						unconfirmed: 0,
+						utxos: [{ tx_hash: coinbaseTxid, tx_pos: 0, value: 5000000000, height: 800000 }]
+					}
+				]
+			]);
+			class CoinbaseRail extends FakeRail {
+				async getTransaction(txid: string) {
+					if (txid === coinbaseTxid) {
+						return { txid, vin: [{ coinbase: '03a02e0c' }], vout: [], blocktime: 1700000000 };
+					}
+					return super.getTransaction(txid);
+				}
+			}
+			await syncWallet({ electrum: new CoinbaseRail(data), tipHeight: 800005 }, wallet.id, {
+				forceRefresh: true
+			});
+
+			const utxos = getUtxos(wallet.id);
+			expect(utxos.length).toBe(1);
+			expect(utxos[0].coinbase).toBe(true);
+		});
+
+		it('flags an ordinary (non-coinbase) UTXO as coinbase:false', async () => {
+			const wallet = importWallet(userId, { name: 'W', xpub: ZPUB });
+			const sh0 = shOf(wallet, 0, 0);
+			const txid = 'ff'.repeat(32);
+			const data = new Map([
+				[
+					sh0,
+					{
+						history: [{ tx_hash: txid, height: 800000 }],
+						confirmed: 150000,
+						unconfirmed: 0,
+						utxos: [{ tx_hash: txid, tx_pos: 0, value: 150000, height: 800000 }]
+					}
+				]
+			]);
+			await syncWallet({ electrum: new FakeRail(data), tipHeight: 800100 }, wallet.id, { forceRefresh: true });
+
+			const utxos = getUtxos(wallet.id);
+			expect(utxos.length).toBe(1);
+			expect(utxos[0].coinbase).toBe(false);
+		});
+
+		it('end to end: selectCoins refuses an immature coinbase UTXO discovered by the real scanner, then accepts it once mature', async () => {
+			const wallet = importWallet(userId, { name: 'W', xpub: ZPUB });
+			const sh0 = shOf(wallet, 0, 0);
+			const coinbaseTxid = 'aa11'.repeat(16);
+			const minedHeight = 800000;
+			const data = new Map([
+				[
+					sh0,
+					{
+						history: [{ tx_hash: coinbaseTxid, height: minedHeight }],
+						confirmed: 5000000000,
+						unconfirmed: 0,
+						utxos: [{ tx_hash: coinbaseTxid, tx_pos: 0, value: 5000000000, height: minedHeight }]
+					}
+				]
+			]);
+			class CoinbaseRail extends FakeRail {
+				async getTransaction(txid: string) {
+					if (txid === coinbaseTxid) return { txid, vin: [{ coinbase: '03a02e0c' }], vout: [], blocktime: 1700000000 };
+					return super.getTransaction(txid);
+				}
+			}
+			const engine = selectEngine(wallet);
+
+			// 5 confirmations -- well short of COINBASE_MATURITY (100): must be excluded.
+			await syncWallet(
+				{ electrum: new CoinbaseRail(data), tipHeight: minedHeight + 4 },
+				wallet.id,
+				{ forceRefresh: true }
+			);
+			const immatureUtxos = getUtxos(wallet.id);
+			expect(immatureUtxos[0].coinbase).toBe(true);
+			expect(() =>
+				selectCoins({
+					engine,
+					scriptType: wallet.scriptType,
+					network: wallet.network,
+					utxos: immatureUtxos,
+					recipients: [{ address: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', amountSats: 100000 }],
+					feeRate: 5,
+					minFeeRate: 1,
+					tipHeight: minedHeight + 4
+				})
+			).toThrow(); // InsufficientFundsError -- the only "coin" available is immature
+
+			// 100 confirmations -- now mature: selection succeeds using it.
+			await syncWallet(
+				{ electrum: new CoinbaseRail(data), tipHeight: minedHeight + 99 },
+				wallet.id,
+				{ forceRefresh: true }
+			);
+			const matureUtxos = getUtxos(wallet.id);
+			const selection = selectCoins({
+				engine,
+				scriptType: wallet.scriptType,
+				network: wallet.network,
+				utxos: matureUtxos,
+				recipients: [{ address: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', amountSats: 100000 }],
+				feeRate: 5,
+				minFeeRate: 1,
+				tipHeight: minedHeight + 99
+			});
+			expect(selection.inputs.length).toBe(1);
+			expect(selection.inputs[0].txid).toBe(coinbaseTxid);
+		});
 	});
 });

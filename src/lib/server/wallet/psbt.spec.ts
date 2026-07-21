@@ -91,6 +91,31 @@ describe('T5: buildPsbt (single-sig)', () => {
 		expect(review.feeSats).toBe(built.review.feeSats);
 		expect(review.totalInputSats).toBe(1_000_000);
 	});
+
+	// Regression (red-team money-path review, LOW-1): a legacy p2pkh input only
+	// ever carries `nonWitnessUtxo` (single.ts inputMeta), never `witnessUtxo`.
+	// reviewSummary used to reconstruct totalInputSats by reading
+	// ONLY inp.witnessUtxo.amount, so a re-fetched review of a p2pkh (or bare
+	// p2sh) draft silently reported totalInputSats=0 and a negative
+	// changeAmountSats -- even though the actual built PSBT, fee, and
+	// recipients were correct. Must now read the authoritative
+	// psbt_draft_inputs values instead.
+	it('reviewSummary reports the real totalInputSats for a legacy p2pkh draft (not 0)', async () => {
+		// A standard "xpub..." (not zpub/ypub) infers p2pkh by SLIP-132 version.
+		const XPUB =
+			'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz';
+		const wallet = importWallet(userId, { name: 'Legacy', xpub: XPUB, scriptType: 'p2pkh' });
+		const built = await buildPsbt(fundingNode(wallet, 1_000_000), userId, wallet.id, {
+			recipients: [{ address: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', amountSats: 100_000 }],
+			feeRate: 10
+		});
+		expect(built.review.totalInputSats).toBe(1_000_000); // the FIRST review was always correct
+
+		const review = reviewSummary(userId, wallet.id, built.draftId);
+		expect(review.totalInputSats).toBe(1_000_000); // was 0 before the fix
+		expect(review.changeAmountSats).not.toBeNull();
+		expect(review.changeAmountSats!).toBeGreaterThan(0); // was negative before the fix
+	});
 });
 
 describe('T5: buildPsbt (multisig stamps N derivations on inputs AND change)', () => {

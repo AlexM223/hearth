@@ -273,7 +273,11 @@ export interface PersistUtxo {
 	index: number;
 	address: string;
 	height: number;
-	coinbase: boolean;
+	// 'unknown' (creating tx undetailed) is stored the same as `true` (coinbase
+	// ? 1 : 0 below) -- the only consumer (select.ts candidateFilter) fails
+	// closed on any truthy value, so the tri-state distinction is app-level
+	// only and does not need its own DB column.
+	coinbase: boolean | 'unknown';
 	unconfirmedTrust: 'own-change' | 'received' | null;
 }
 export interface PersistTx {
@@ -501,6 +505,24 @@ export function reservedOutpoints(userId: number): Set<string> {
 		)
 		.all(userId) as unknown as { txid: string; vout: number }[];
 	return new Set(rows.map((r) => `${r.txid}:${r.vout}`));
+}
+
+export interface DraftInputRow {
+	txid: string;
+	vout: number;
+	valueSats: number;
+}
+
+/** The AUTHORITATIVE per-input value set for a draft (WALLET-ENGINE §2.5): the
+ *  values recorded at build time from the real selection, not re-derived from
+ *  re-parsing the (possibly witnessUtxo-less, e.g. legacy p2pkh/bare-p2sh)
+ *  PSBT on a later read (red-team review LOW-1: that re-derivation silently
+ *  produced valueSats=0 for those script types on the re-fetched review). */
+export function getDraftInputRows(draftId: number): DraftInputRow[] {
+	const rows = getDb()
+		.prepare('SELECT txid, vout, value_sats FROM psbt_draft_inputs WHERE draft_id = ?')
+		.all(draftId) as unknown as { txid: string; vout: number; value_sats: number }[];
+	return rows.map((r) => ({ txid: r.txid, vout: r.vout, valueSats: r.value_sats }));
 }
 
 /** Which live drafts reserve a given outpoint (for coin-control warnings). */

@@ -35,7 +35,10 @@ interface ElectrumUnspent {
 }
 interface VerboseTx {
 	txid?: string;
-	vin?: { txid?: string; vout?: number }[];
+	// `coinbase` is present (a hex scriptSig string) ONLY on a coinbase input's
+	// vin[0], and such an input never carries txid/vout (Core's verbose
+	// getrawtransaction / Electrum's verbose blockchain.transaction.get shape).
+	vin?: { txid?: string; vout?: number; coinbase?: string }[];
 	vout?: { value?: number; n?: number; scriptPubKey?: { hex?: string } }[];
 	time?: number;
 	blocktime?: number;
@@ -70,7 +73,12 @@ export interface ScannedUtxo {
 	index: number;
 	address: string;
 	height: number;
-	coinbase: boolean;
+	// true/false once the creating tx's vin[0] has actually been inspected
+	// (below); 'unknown' when the creating tx fell outside TX_DETAIL_CAP or its
+	// detail fetch failed -- select.ts's candidateFilter treats 'unknown' the
+	// same as true (fail closed: never spend a possibly-immature coinbase coin
+	// just because we couldn't prove otherwise).
+	coinbase: boolean | 'unknown';
 	unconfirmedTrust: 'own-change' | 'received' | null;
 }
 export interface ScannedTx {
@@ -250,7 +258,12 @@ export async function scanWallet(
 				index: a.index,
 				address: a.address,
 				height: u.height > 0 ? u.height : 0,
-				coinbase: false, // refined below if the detailed tx says so
+				// Resolved for real once `detailed` (below) has inspected the
+				// creating tx's vin[0]; 'unknown' (fail-closed) if that never
+				// happens (hearth-M6-redteam-1: this used to be hardcoded `false`
+				// and never actually refined, silently defeating select.ts's
+				// coinbase-maturity guard for every mined-into-wallet payout).
+				coinbase: 'unknown',
 				unconfirmedTrust: confirmed ? null : a.chain === 1 ? 'own-change' : 'received'
 			});
 		}
@@ -289,6 +302,19 @@ export async function scanWallet(
 				ownedOutputs.set(`${txid}:${v.n}`, btcToSats(v.value));
 			}
 		}
+	}
+
+	// Resolve each UTXO's real coinbase-ness from its (now-detailed) creating
+	// tx's vin[0].coinbase field -- select.ts's maturity guard is meaningless
+	// if this never runs (hearth-M6-redteam-1). A txid outside TX_DETAIL_CAP
+	// has no entry here and stays 'unknown' (fail closed), never silently `false`.
+	const coinbaseByTxid = new Map<string, boolean>();
+	for (const { txid, tx } of detailed) {
+		coinbaseByTxid.set(txid, typeof tx.vin?.[0]?.coinbase === 'string');
+	}
+	for (const u of utxos) {
+		const known = coinbaseByTxid.get(u.txid);
+		u.coinbase = known ?? 'unknown';
 	}
 	const transactions: ScannedTx[] = [];
 	for (const { txid, tx } of detailed) {
