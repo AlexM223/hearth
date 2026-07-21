@@ -93,7 +93,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HearthConfig {
 	const electrum: ElectrumConfig =
 		platform === 'umbrel'
 			? {
-					// Fixed Fulcrum service address on the umbrel_main_network bridge.
+					// Normally arrives via docker-compose.yml's HEARTH_ELECTRUM_HOST/PORT,
+					// interpolated from ${APP_ELECTRS_NODE_IP}/${APP_ELECTRS_NODE_PORT} --
+					// umbrel-app.yml declares `electrs` as a dependency (DECISIONS.md §8,
+					// 2026-07-21 amendment) so umbrelOS guarantees install order and
+					// injects the real address for whichever provider (electrs, or Fulcrum
+					// via its `implements: [electrs]` contract) the user picked. The
+					// literal fallback below is Fulcrum's own fixed service address on the
+					// umbrel_main_network bridge -- it only fires if those vars ever come
+					// through unset (e.g. a hand-rolled compose that skips the dependency).
 					host: env.HEARTH_ELECTRUM_HOST ?? '10.21.21.200',
 					port: num(env.HEARTH_ELECTRUM_PORT, 50002),
 					tls: false

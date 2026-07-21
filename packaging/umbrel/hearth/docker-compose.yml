@@ -75,6 +75,17 @@ services:
       HEARTH_CORE_RPC_PORT: ${APP_BITCOIN_RPC_PORT}
       HEARTH_CORE_RPC_USER: ${APP_BITCOIN_RPC_USER}
       HEARTH_CORE_RPC_PASS: ${APP_BITCOIN_RPC_PASS}
+      # --- auto-wired Electrum rail, same treatment (DECISIONS.md §8, 2026-07-21 amendment) ---
+      # `dependencies: [bitcoin, electrs]` in umbrel-app.yml lets the user pick
+      # either Umbrel's own `electrs` app or `fulcrum` (which declares
+      # `implements: [electrs]` and exports the identical APP_ELECTRS_NODE_IP /
+      # APP_ELECTRS_NODE_PORT contract) as the provider; either way umbrelOS
+      # guarantees install order and injects the real address here instead of
+      # Hearth having to guess it. config/index.ts's 10.21.21.200:50002 fallback
+      # (Fulcrum's own fixed service address) only fires if these ever come
+      # through unset -- e.g. a hand-rolled compose that skips the dependency.
+      HEARTH_ELECTRUM_HOST: ${APP_ELECTRS_NODE_IP}
+      HEARTH_ELECTRUM_PORT: ${APP_ELECTRS_NODE_PORT}
       # --- the CSRF/origin fix, REQUIRED behind app_proxy (DECISIONS.md §5.2) ---
       # Without these, adapter-node assumes https and SvelteKit's CSRF origin
       # check rejects every form POST; app_proxy sets both by default.

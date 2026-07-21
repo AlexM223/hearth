@@ -29,3 +29,7 @@ vite.config.ts.timestamp-*
 *.db-wal
 *.log
 
+# M7 scratch: local-only clones/working copies (umbrel-apps checkout for
+# lint, etc.) -- never committed, read-only reference material
+/.scratch/
+
