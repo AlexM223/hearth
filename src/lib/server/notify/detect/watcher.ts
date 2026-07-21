@@ -53,6 +53,10 @@ export interface VerboseVout {
 }
 export interface VerboseTx {
 	vout?: VerboseVout[];
+	/** Present once the tx is confirmed (Electrum verbose / Core RPC shape).
+	 *  Used by detect/confirm.ts's milestone progression -- undefined/absent
+	 *  is treated as "not confirmed enough yet" (fail closed), never a guess. */
+	confirmations?: number;
 }
 
 /** The narrow Electrum surface the watcher needs beyond the SPV gate's. */

@@ -98,6 +98,12 @@ export function trackPendingInbound(
  * suppress. Must run inside the SAME transaction as the in-app events write
  * (dispatch.ts, T3) so a crash between claim and record can never silently
  * lose a payment notification (cairn-fzqpe).
+ *
+ * Sets `last_milestone = 1` unconditionally: firing `tx_received` IS the
+ * CONFIRM_THRESHOLD=1 milestone (WATCHTOWER.md §1.6, "default routing fires
+ * only the 1-conf milestone"). detect/confirm.ts's milestone progression
+ * (T2) only ever needs to look for a NEXT milestone strictly greater than
+ * this.
  */
 export function claimReceived(
 	db: DatabaseSync,
@@ -109,13 +115,14 @@ export function claimReceived(
 ): boolean {
 	const res = db
 		.prepare(
-			`INSERT INTO notified_txids (wallet_id, user_id, txid, status, confirmed, confirmed_height, amount_sats)
-			 VALUES (?, ?, ?, 'notified', 1, ?, ?)
+			`INSERT INTO notified_txids (wallet_id, user_id, txid, status, confirmed, confirmed_height, amount_sats, last_milestone)
+			 VALUES (?, ?, ?, 'notified', 1, ?, ?, 1)
 			 ON CONFLICT(wallet_id, user_id, txid) DO UPDATE SET
 			   status = 'notified',
 			   confirmed = 1,
 			   confirmed_height = excluded.confirmed_height,
 			   amount_sats = COALESCE(excluded.amount_sats, notified_txids.amount_sats),
+			   last_milestone = 1,
 			   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 			 WHERE notified_txids.status = 'pending'`
 		)
@@ -140,4 +147,87 @@ export function baselineTxids(walletId: number, userId: number, txids: string[])
 		);
 		for (const txid of txids) stmt.run(walletId, userId, txid);
 	});
+}
+
+// --------------------------------------------------------- T2: confirm.ts
+
+/** The "not-yet-confirmed" population (WATCHTOWER.md §1.6 step 1): a
+ *  'pending' row is the only status this can ever match under this schema
+ *  (claimReceived always sets confirmed=1 together with status='notified',
+ *  so a 'notified' row is never confirmed=0 here) -- confirm.ts uses this
+ *  population ONLY to notice a mempool tx vanishing before it ever
+ *  confirmed (reconcileDisappeared's "never confirmed" wording); the actual
+ *  0->1-conf transition is watcher.ts's job (a scripthash status-change
+ *  event), not a block event. */
+export function selectUnconfirmedRows(): NotifiedTxidRow[] {
+	const rows = getDb()
+		.prepare(
+			`SELECT wallet_id, user_id, txid, status, confirmed, confirmed_height, amount_sats, last_milestone
+			 FROM notified_txids WHERE confirmed = 0 AND status = 'pending'`
+		)
+		.all() as unknown as RawRow[];
+	return rows.map(toRow);
+}
+
+/** The reorg-recheck population (WATCHTOWER.md §1.6 step 1): confirmed,
+ *  notified rows whose confirmed_height is still within REORG_RECHECK_DEPTH
+ *  of the tip -- both reorg detection AND further milestone (3/6-conf)
+ *  progression are evaluated against this population (confirm.ts). Rows
+ *  with `confirmed_height IS NULL` (baselined/legacy) are never re-checked. */
+export function selectReorgWindowRows(tipHeight: number, depth: number): NotifiedTxidRow[] {
+	const rows = getDb()
+		.prepare(
+			`SELECT wallet_id, user_id, txid, status, confirmed, confirmed_height, amount_sats, last_milestone
+			 FROM notified_txids
+			 WHERE confirmed = 1 AND status = 'notified' AND confirmed_height IS NOT NULL AND confirmed_height > ?`
+		)
+		.all(tipHeight - depth) as unknown as RawRow[];
+	return rows.map(toRow);
+}
+
+/** Advance a row's milestone marker -- fires at most once per milestone
+ *  (dedup key (txid,milestone) collapses to "milestone > last_milestone",
+ *  enforced by the WHERE clause). Returns true iff THIS call advanced it. */
+export function markMilestone(
+	walletId: number,
+	userId: number,
+	txid: string,
+	milestone: number,
+	confirmedHeight: number
+): boolean {
+	const res = getDb()
+		.prepare(
+			`UPDATE notified_txids
+			 SET last_milestone = ?, confirmed_height = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+			 WHERE wallet_id = ? AND user_id = ? AND txid = ? AND last_milestone < ?`
+		)
+		.run(milestone, confirmedHeight, walletId, userId, txid, milestone);
+	return Number(res.changes) > 0;
+}
+
+/** Terminal transition: a confirmed/pending inbound tx vanished from the
+ *  chain and the user is told (a real reversal/cancellation, never silent).
+ *  Only transitions from 'pending' or 'notified' -- already-terminal rows
+ *  ('replaced'/'dropped') are left alone (idempotent). */
+export function markReplaced(walletId: number, userId: number, txid: string): boolean {
+	const res = getDb()
+		.prepare(
+			`UPDATE notified_txids SET status = 'replaced', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+			 WHERE wallet_id = ? AND user_id = ? AND txid = ? AND status IN ('pending', 'notified')`
+		)
+		.run(walletId, userId, txid);
+	return Number(res.changes) > 0;
+}
+
+/** Terminal transition: a confirmed/pending inbound tx vanished silently
+ *  (change output / own-spend / an RBF fee-bump replacement) -- no
+ *  notification fires, but it stops being re-checked forever. */
+export function markDropped(walletId: number, userId: number, txid: string): boolean {
+	const res = getDb()
+		.prepare(
+			`UPDATE notified_txids SET status = 'dropped', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+			 WHERE wallet_id = ? AND user_id = ? AND txid = ? AND status IN ('pending', 'notified')`
+		)
+		.run(walletId, userId, txid);
+	return Number(res.changes) > 0;
 }

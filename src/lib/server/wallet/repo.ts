@@ -466,6 +466,21 @@ export function getTransactionRows(walletId: number, limit = 50): TxDbRow[] {
 		.all(walletId, limit) as unknown as TxDbRow[];
 }
 
+/** True when this wallet's OWN persisted transaction history (scan.ts's
+ *  write) shows this txid as a net-negative delta -- i.e. a spend we
+ *  originated, never a genuine third-party inbound payment. Used by
+ *  notify/detect/confirm.ts's reorg reconciliation (WATCHTOWER.md §1.6.1) to
+ *  decide whether a vanished tx should stay silent (our own change/fee-bump)
+ *  or alert the user (a real incoming payment reversed). Callers must treat
+ *  a thrown error as `false` (fail OPEN here specifically -- a lookup error
+ *  must never suppress a genuine cancellation alert). */
+export function isOwnSendTx(walletId: number, txid: string): boolean {
+	const row = getDb()
+		.prepare('SELECT delta_sats FROM transactions WHERE wallet_id = ? AND txid = ?')
+		.get(walletId, txid) as { delta_sats: number } | undefined;
+	return row !== undefined && row.delta_sats < 0;
+}
+
 // -------------------------------------------------------------- draft writes
 
 export interface NewDraft {

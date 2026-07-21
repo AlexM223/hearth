@@ -126,7 +126,8 @@ export {
 	listAllWalletRows,
 	getWalletRowUnscoped,
 	highestUsedIndex,
-	listWalletScriptPubKeys
+	listWalletScriptPubKeys,
+	isOwnSendTx
 } from './repo.js';
 
 export {
