@@ -7,7 +7,7 @@
 <section class="panel">
 	<p class="t-micro">Settings</p>
 	<h1 class="t-title">Chain backend, display &amp; members</h1>
-	<p class="t-label">Node auto-connect and sats-first display will live here starting in M4.</p>
+	<p class="t-label">Node auto-connect and sats-first display are coming soon.</p>
 </section>
 
 <section class="panel entry">
