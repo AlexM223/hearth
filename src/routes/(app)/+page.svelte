@@ -74,7 +74,7 @@
 <section class="feed panel">
 	<p class="t-micro">Watchtower</p>
 	{#if data.feed.length === 0}
-		<p class="t-label empty">Nothing to watch yet -- connect your node in Settings to get started.</p>
+		<p class="t-label empty">No activity yet -- import or create a wallet to start watching.</p>
 	{:else}
 		<ul class="feed-list">
 			{#each data.feed as feedEvent (feedEvent.id)}
