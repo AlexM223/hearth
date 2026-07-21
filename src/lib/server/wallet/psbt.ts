@@ -30,7 +30,14 @@ import {
 	getDraftInputRows,
 	type NewDraft
 } from './repo.js';
-import { AlreadyReplacedError, CommitmentError, NotFoundError, WalletError } from './errors.js';
+import {
+	AlreadyReplacedError,
+	CommitmentError,
+	InvalidFeeRateError,
+	InvalidRecipientError,
+	NotFoundError,
+	WalletError
+} from './errors.js';
 import type { SigningProgress } from './types.js';
 
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -45,6 +52,41 @@ export interface BuildRequest {
 	feeRate: number;
 	onlyUtxos?: { txid: string; vout: number }[];
 	replacesTxid?: string;
+}
+
+/** Shape/range-validate the raw request BEFORE touching the node or the DB
+ *  (UX sweep hearth-5vw). An empty Send form (no client-side gate; that's a
+ *  separate fix in the wallet detail page) used to reach `selectCoins`/
+ *  `decodeAddress` with a plausible-looking but garbage body -- empty
+ *  address, `amountSats: 0` (`Number('')` is `0`, not `NaN`) -- and when the
+ *  node was ALSO unreachable (syncWallet/resolveMinFeeRate throw untyped
+ *  network errors first), the caller never got as far as the typed
+ *  validation, surfacing as a raw 500 ("something went wrong") instead of a
+ *  400 with a plain-language message. Every failure here is a WalletError ->
+ *  httpStatusFor maps it to 400, unconditionally, regardless of whether the
+ *  node backends are reachable. */
+function assertValidBuildRequest(req: BuildRequest): void {
+	if (!Array.isArray(req.recipients) || req.recipients.length === 0) {
+		throw new WalletError('enter at least one recipient');
+	}
+	for (const r of req.recipients) {
+		if (r == null || typeof r.address !== 'string' || r.address.trim() === '') {
+			throw new InvalidRecipientError('enter a recipient address');
+		}
+		if (r.amountSats !== 'max') {
+			if (
+				typeof r.amountSats !== 'number' ||
+				!Number.isFinite(r.amountSats) ||
+				!Number.isInteger(r.amountSats) ||
+				r.amountSats <= 0
+			) {
+				throw new WalletError('enter an amount in sats');
+			}
+		}
+	}
+	if (typeof req.feeRate !== 'number' || !Number.isFinite(req.feeRate) || req.feeRate <= 0) {
+		throw new InvalidFeeRateError('enter a fee rate');
+	}
 }
 
 async function resolveMinFeeRate(node: BuildNode): Promise<number> {
@@ -73,6 +115,11 @@ export async function buildPsbt(
 	walletId: number,
 	req: BuildRequest
 ): Promise<BuiltDraft> {
+	// Validate the request SHAPE before anything else -- no lock, no wallet
+	// lookup, no node call. Guarantees a clean 400 for a malformed/empty Send
+	// form even when the node backends are unreachable (hearth-5vw).
+	assertValidBuildRequest(req);
+
 	// The whole reserve -> select -> persist runs under the build lock so the
 	// window is atomic across the Electrum await (import lazily to avoid a cycle).
 	const { withLock } = await import('./lock.js');

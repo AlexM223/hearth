@@ -7,6 +7,8 @@
 	import { formatSats as fmtSats } from '$lib/format.js';
 	import SignStep from '$lib/components/sign/SignStep.svelte';
 	import type { SigningProgress } from '$lib/shared/signing.js';
+	import { isValidAddressFormat } from '$lib/shared/address.js';
+	import { isValidSendAmount, MIN_SEND_SATS } from '$lib/shared/amount.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -29,6 +31,29 @@
 	let feeRate = $state('5');
 	let advanced = $state(false);
 	let selectedUtxos = $state<Record<string, boolean>>({});
+	// Client-side validation (UX sweep hearth-5vw, finding #3): the Review
+	// button used to be enabled with no required-field check at all, so an
+	// empty submission's only feedback was whatever the server happened to
+	// say. These gate the button; the server (buildPsbt's
+	// assertValidBuildRequest) remains the authoritative check regardless.
+	let addressTouched = $state(false);
+	let amountTouched = $state(false);
+	let addressError = $derived(
+		toAddress.trim() === ''
+			? 'Enter a recipient address.'
+			: isValidAddressFormat(toAddress.trim(), data.wallet.network)
+				? null
+				: 'That is not a valid bitcoin address for this network.'
+	);
+	let amountError = $derived(
+		amount.trim() === ''
+			? 'Enter an amount.'
+			: isValidSendAmount(amount)
+				? null
+				: `Enter a whole number of sats (at least ${MIN_SEND_SATS}).`
+	);
+	let feeRateValid = $derived(Number.isFinite(Number(feeRate)) && Number(feeRate) > 0);
+	let canReview = $derived(addressError === null && amountError === null && feeRateValid);
 	let review = $state<null | {
 		draftId: number;
 		psbt: string;
@@ -49,6 +74,12 @@
 	}
 
 	async function buildDraft() {
+		// Defense in depth: the Review button is already disabled while
+		// !canReview, but a form-level Enter-key submit or a stale click
+		// shouldn't be able to fire a request the button itself would refuse.
+		addressTouched = true;
+		amountTouched = true;
+		if (!canReview) return;
 		sendError = null;
 		review = null;
 		broadcastTxid = null;
@@ -180,11 +211,26 @@
 			<p class="t-micro">Send bitcoin</p>
 			<label class="field">
 				<span class="t-label">To address</span>
-				<input class="input mono" bind:value={toAddress} placeholder="bc1…" />
+				<input
+					class="input mono"
+					bind:value={toAddress}
+					onblur={() => (addressTouched = true)}
+					placeholder="bc1…"
+					aria-invalid={addressTouched && addressError !== null}
+				/>
+				{#if addressTouched && addressError}<p class="field-hint err">{addressError}</p>{/if}
 			</label>
 			<label class="field">
 				<span class="t-label">Amount (sats)</span>
-				<input class="input" bind:value={amount} inputmode="numeric" placeholder="100000" />
+				<input
+					class="input"
+					bind:value={amount}
+					onblur={() => (amountTouched = true)}
+					inputmode="numeric"
+					placeholder="100000"
+					aria-invalid={amountTouched && amountError !== null}
+				/>
+				{#if amountTouched && amountError}<p class="field-hint err">{amountError}</p>{/if}
 			</label>
 			<label class="field">
 				<span class="t-label">Fee rate (sat/vB)</span>
@@ -210,7 +256,7 @@
 			{/if}
 
 			{#if sendError}<p class="err t-label">{sendError}</p>{/if}
-			<button class="btn-primary" type="button" onclick={buildDraft} disabled={sendBusy}>
+			<button class="btn-primary" type="button" onclick={buildDraft} disabled={sendBusy || !canReview}>
 				{sendBusy ? 'Building…' : 'Review'}
 			</button>
 		{:else}
@@ -369,6 +415,10 @@
 		color: var(--text-secondary);
 		margin-bottom: 6px;
 	}
+	.field-hint {
+		margin: 6px 0 0;
+		font-size: var(--t-label);
+	}
 	.input {
 		width: 100%;
 		background: var(--bg-input);
@@ -378,6 +428,9 @@
 		font-family: var(--font-ui);
 		padding: 10px 12px;
 		font-size: var(--t-body);
+	}
+	.input[aria-invalid='true'] {
+		border-color: var(--error);
 	}
 	.input.mono {
 		font-family: var(--font-mono, ui-monospace, monospace);
