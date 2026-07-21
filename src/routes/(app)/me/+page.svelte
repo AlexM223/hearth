@@ -64,6 +64,15 @@
 	</form>
 </section>
 
+<section class="panel entry">
+	<p class="t-micro">Notifications</p>
+	<p class="t-label">
+		Choose which channels reach you -- email, Telegram, ntfy, Nostr, webhook -- and which of your
+		own events fire on each.
+	</p>
+	<a class="btn-primary secondary" href="/me/notifications">Manage notifications</a>
+</section>
+
 <style>
 	.field {
 		display: block;
@@ -97,8 +106,14 @@
 	.err {
 		color: var(--error);
 	}
-	.theme-panel {
+	.theme-panel,
+	.entry {
 		margin-top: var(--space-3);
+	}
+	.entry a {
+		display: inline-block;
+		margin-top: var(--space-2);
+		text-decoration: none;
 	}
 	.theme-choice {
 		border: none;
