@@ -17,3 +17,13 @@ export interface SigningProgress {
 	keys: { fingerprint: string; path: string; signed: boolean }[];
 	inputCount: number;
 }
+
+/** The slice of wallet identity the browser-side drivers need to build a
+ *  Ledger/Trezor wallet policy (SIGNING.md §1.1, §1.2) -- cosigner xpubs are
+ *  the owner's own already-known public key material, never a secret. */
+export interface SigningWalletContext {
+	kind: 'single' | 'multisig';
+	scriptType: string;
+	threshold: number;
+	keys: { xpub: string; fingerprint: string; path: string; name: string | null }[];
+}

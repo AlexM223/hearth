@@ -41,7 +41,12 @@ export const load: PageServerLoad = ({ locals, params }) => {
 			scriptType: wallet.scriptType,
 			network: wallet.network,
 			threshold: wallet.threshold,
-			keyCount: wallet.keys.length
+			keyCount: wallet.keys.length,
+			// Cosigner xpubs/fingerprints/paths -- needed browser-side to build a
+			// Ledger/Trezor wallet policy for multisig signing (SIGNING.md §1.1,
+			// §1.2). These are the owner's own already-known public key material,
+			// never a secret; still owner-scoped by this same load's role check.
+			keys: wallet.keys.map((k) => ({ xpub: k.xpub, fingerprint: k.fingerprint, path: k.path, name: k.name ?? null }))
 		},
 		balance: getBalance(walletId, syncNode),
 		snapshot: getSnapshot(walletId, syncNode),

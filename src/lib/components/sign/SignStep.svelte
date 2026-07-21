@@ -4,7 +4,7 @@
 	// same POST /sign, and this component just re-renders `progress` from
 	// whatever the method returns. BROWSER-SIDE component -- never imports
 	// $lib/server (SIGNING.md §0.3).
-	import type { SigningProgress } from '$lib/shared/signing.js';
+	import type { SigningProgress, SigningWalletContext } from '$lib/shared/signing.js';
 	import SignWithFile from './SignWithFile.svelte';
 	import SignWithQr from './SignWithQr.svelte';
 	import SignWithDevice from './SignWithDevice.svelte';
@@ -16,13 +16,15 @@
 		draftId,
 		psbt,
 		progress = $bindable(),
-		httpsExternalPort
+		httpsExternalPort,
+		wallet
 	}: {
 		walletId: number;
 		draftId: number;
 		psbt: string;
 		progress: SigningProgress;
 		httpsExternalPort: number | null;
+		wallet: SigningWalletContext;
 	} = $props();
 
 	let method = $state<Method | null>(null);
@@ -92,7 +94,7 @@
 			{:else if method === 'qr'}
 				<SignWithQr {psbt} onsigned={submitSignedPsbt} {onerror} {httpsExternalPort} />
 			{:else}
-				<SignWithDevice {psbt} onsigned={submitSignedPsbt} {onerror} {httpsExternalPort} />
+				<SignWithDevice {walletId} {psbt} onsigned={submitSignedPsbt} {onerror} {httpsExternalPort} {wallet} />
 			{/if}
 		</div>
 	{/if}

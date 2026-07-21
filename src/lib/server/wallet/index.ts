@@ -127,7 +127,11 @@ export {
 	getWalletRowUnscoped,
 	highestUsedIndex,
 	listWalletScriptPubKeys,
-	isOwnSendTx
+	isOwnSendTx,
+	listLedgerRegistrations,
+	getLedgerRegistration,
+	saveLedgerRegistration,
+	type LedgerRegistrationRow
 } from './repo.js';
 
 export {

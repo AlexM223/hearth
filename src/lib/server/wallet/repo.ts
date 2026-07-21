@@ -706,3 +706,58 @@ export function findDraftByReplacesTxid(walletId: number, replacedTxid: string):
 		.get(walletId, replacedTxid) as { id: number } | undefined;
 	return row ? row.id : null;
 }
+
+// ---------------------------------------------------------------------------
+// Ledger BIP-388 wallet-policy registration (SIGNING.md §1.1, WALLET-ENGINE
+// §2.5, §3.2). Optional, multisig-only: the HMAC a registered Ledger returns
+// so a later sign can skip re-approval. Not a secret -- losing/wiping it just
+// means the next sign re-registers. Scoped by (wallet_id, master_fp) so each
+// cosigner's own device gets its own row.
+
+export interface LedgerRegistrationRow {
+	walletId: number;
+	masterFp: string;
+	policyName: string;
+	policyHmac: string;
+	createdAt: string;
+}
+
+/** All registrations for a wallet (one Hearth member may hold several devices). */
+export function listLedgerRegistrations(walletId: number): LedgerRegistrationRow[] {
+	const rows = getDb()
+		.prepare(
+			'SELECT wallet_id, master_fp, policy_name, policy_hmac, created_at FROM ledger_wallet_registrations WHERE wallet_id = ?'
+		)
+		.all(walletId) as { wallet_id: number; master_fp: string; policy_name: string; policy_hmac: string; created_at: string }[];
+	return rows.map((r) => ({
+		walletId: r.wallet_id,
+		masterFp: r.master_fp,
+		policyName: r.policy_name,
+		policyHmac: r.policy_hmac,
+		createdAt: r.created_at
+	}));
+}
+
+/** This wallet's registration for one specific device (by master fingerprint), if any. */
+export function getLedgerRegistration(walletId: number, masterFp: string): LedgerRegistrationRow | null {
+	const row = getDb()
+		.prepare(
+			'SELECT wallet_id, master_fp, policy_name, policy_hmac, created_at FROM ledger_wallet_registrations WHERE wallet_id = ? AND master_fp = ?'
+		)
+		.get(walletId, masterFp.toLowerCase()) as
+		| { wallet_id: number; master_fp: string; policy_name: string; policy_hmac: string; created_at: string }
+		| undefined;
+	if (!row) return null;
+	return { walletId: row.wallet_id, masterFp: row.master_fp, policyName: row.policy_name, policyHmac: row.policy_hmac, createdAt: row.created_at };
+}
+
+/** Persist (or replace) a device's registration HMAC for this wallet. */
+export function saveLedgerRegistration(walletId: number, masterFp: string, policyName: string, policyHmac: string): void {
+	getDb()
+		.prepare(
+			`INSERT INTO ledger_wallet_registrations (wallet_id, master_fp, policy_name, policy_hmac)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT (wallet_id, master_fp) DO UPDATE SET policy_name = excluded.policy_name, policy_hmac = excluded.policy_hmac`
+		)
+		.run(walletId, masterFp.toLowerCase(), policyName, policyHmac);
+}

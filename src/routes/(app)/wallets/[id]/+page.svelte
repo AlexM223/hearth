@@ -246,6 +246,12 @@
 				psbt={review.psbt}
 				bind:progress={review.progress}
 				httpsExternalPort={data.httpsExternalPort}
+				wallet={{
+					kind: data.wallet.kind,
+					scriptType: data.wallet.scriptType,
+					threshold: data.wallet.threshold,
+					keys: data.wallet.keys
+				}}
 			/>
 
 			<p class="t-label muted slide-hint">
