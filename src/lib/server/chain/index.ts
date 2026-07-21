@@ -31,3 +31,12 @@ export type { Richness as ExplorerRichness } from './types.js';
 
 export { classifySearch, HEIGHT_RE, HEX64_RE, type SearchNode } from './search.js';
 export { isDecodableAddress } from './address.js';
+export {
+	getBlockDetail,
+	getBlockTxPage,
+	listRecentBlocks,
+	type BlocksNode,
+	type BlocksElectrumRail
+} from './blocks.js';
+export { getBlockPoolAttribution, listPoolFoundBlockHashes } from './pool.js';
+export { clearAllCaches } from './cache.js';
