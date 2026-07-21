@@ -2,7 +2,7 @@ manifestVersion: 1
 id: hearth
 category: bitcoin
 name: Hearth
-version: "0.1.2"
+version: "0.2.0"
 tagline: Come navigate Bitcoin with me
 description: >-
   Hearth is the always-watching Bitcoin wallet for the people you trust: you
@@ -42,12 +42,15 @@ description: >-
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
 releaseNotes: >-
-  0.1.2 -- wallet history now shows an approximate age next to each
-  confirmation ("block 731,097 · ~4 y ago"), and the mining page's off-state
-  is honest and quiet: no placeholder hashrate/best-share panels before your
-  first share, the pool card says plainly that nothing is listening yet, and
-  the owner panel explains how to start the engine instead of implying your
-  node is down.
+  0.2.0 -- import any wallet config, from anywhere: drag and drop (or
+  upload, paste, or QR-scan) a Caravan JSON, a Coldcard multisig setup
+  .txt, a Sparrow wallet export, an output descriptor, or a bare
+  xpub/ypub/zpub -- Hearth auto-detects the format and shows a full
+  preview (quorum, script type, every cosigner) before anything is
+  saved. Wrong file? A PSBT gets pointed at the signing flow and a
+  private key is refused outright. Plus: one-click wallet backup
+  (names + public descriptors) that restores by dropping the file on
+  any Hearth.
 developer: Alex Martinez
 website: https://github.com/AlexM223/hearth
 dependencies:
