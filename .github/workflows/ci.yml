@@ -1,0 +1,71 @@
+name: CI
+
+# DECISIONS.md §6 promises every milestone "typecheck + Vitest green ... CI
+# (typecheck + Vitest + no-native-deps guard + buildx amd64/arm64 +
+# prod-boot smoke)" starting at M0. No .github/workflows existed anywhere in
+# the repo before M7 -- this file closes that gap (found while preparing the
+# real release.yml) so PRs and pushes to main actually get the CI the
+# constitution already claims exists. Build-only, no registry push (see
+# release.yml for the real publish-on-tag workflow).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Typecheck
+        run: npm run check
+      - name: Unit tests
+        run: npm run test
+      - name: No-native-deps guard
+        run: npm run check:native
+
+  build-image:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build only, both platforms, no push -- proves the Dockerfile still
+      # builds clean on both arches on every PR without needing GHCR
+      # credentials in untrusted PR contexts.
+      - name: Build multi-arch (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          load: false
+
+      # Load just the native (amd64) image locally so the boot smoke test
+      # can actually run it -- `docker buildx build --load` only supports a
+      # single platform at a time.
+      - name: Build amd64 image for the boot smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: hearth:ci-smoke
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Container boot smoke test
+        run: node scripts/smoke-test-image.mjs hearth:ci-smoke

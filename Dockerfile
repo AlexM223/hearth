@@ -47,6 +47,22 @@ COPY --from=build /app/scripts/serverProto.mjs ./scripts/serverProto.mjs
 
 # SQLite database + logs + first-boot TLS cert live on the /data volume --
 # mount it or lose it (DECISIONS.md §5.1, §5.4).
+#
+# HEARTH_DATA_DIR is REQUIRED here, not just HEARTH_DB/HEARTH_LOG_FILE: this
+# was a real container-crashing bug found by M7's boot smoke test.
+# config/index.ts's `dataDir` (used directly by hooks.server.ts's
+# initSecretKey(config.dataDir) for the notify-secrets encryption key) falls
+# back to a relative './data' whenever neither HEARTH_DATA_DIR nor
+# APP_DATA_DIR is set -- and docker-compose.yml's `${APP_DATA_DIR}` only
+# resolves the host-side bind-mount SOURCE path (interpolated by umbrelOS
+# before the container starts); it is never passed into the container's own
+# environment. Without this line the container tries to mkdir './data'
+# (i.e. /app/data) as uid 1000, which does not own /app, and the whole
+# process crashes on first boot with EACCES -- every install would
+# crash-loop. HEARTH_DB / HEARTH_LOG_FILE stay as their own explicit
+# absolute paths (some tests/tools read them directly), but they must agree
+# with HEARTH_DATA_DIR, not just happen to point at the same volume.
+ENV HEARTH_DATA_DIR=/data
 ENV HEARTH_DB=/data/hearth.db
 ENV HEARTH_LOG_FILE=/data/logs/hearth.log
 ENV PORT=3000

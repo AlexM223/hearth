@@ -1,0 +1,98 @@
+name: Release image
+
+# Real multi-arch build + push to GHCR, on a version tag push (v0.1.0, v0.1.1,
+# ...). This workflow performs an actual publish -- it only runs when Alex
+# pushes a tag to a real GitHub repo. Writing this file is packaging prep
+# (M7, DECISIONS.md §5.1/§5.5); it does not publish anything by existing --
+# no tag has been pushed, no GitHub repo exists yet for this to run against.
+#
+# After a real run, verify both platforms landed in the manifest list with:
+#   docker buildx imagetools inspect ghcr.io/alexm223/hearth:<version>
+# and update packaging/umbrel/hearth/docker-compose.yml's image digest
+# (currently `<to-fill-after-push>`) with the real one reported there.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/hearth
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # Belt-and-suspenders: the Dockerfile's own build stage already fails
+      # on any native .node addon in the pruned production tree
+      # (DECISIONS.md §5.1's no-native-deps guard), but re-run the same
+      # check against the checked-out source here too so a CI-only bypass
+      # of the Docker build can never slip a native addon through.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: No-native-deps guard
+        run: npm run check:native
+
+      - name: Set up QEMU (arm64 emulation for the cross-arch build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          provenance: false
+
+      - name: Print the pushed manifest-list digest
+        run: |
+          echo "Pushed digest: ${{ steps.push.outputs.digest }}"
+          echo "Full ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}@${{ steps.push.outputs.digest }}"
+          echo "::notice::Update packaging/umbrel/hearth/docker-compose.yml and packaging/store-repo/hearth-app-store/hearth/docker-compose.yml's image: line with the digest above."
+
+      # Boot-smoke the just-pushed amd64 image on the runner itself (a real
+      # pull, not the local build cache) before calling the release good.
+      # arm64 is build-verified by buildx's own per-platform build step
+      # above but not booted here -- ubuntu-latest runners are amd64-only
+      # and a QEMU-emulated boot smoke test in CI is slow/flaky enough that
+      # it is intentionally left to the manual pre-submission checklist
+      # (packaging/umbrel/hearth/RELEASE-CHECKLIST.md) rather than gating
+      # every tag push on it.
+      - name: Pull pushed image and run the boot smoke test
+        run: |
+          docker pull "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}"
+          node scripts/smoke-test-image.mjs "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}"
