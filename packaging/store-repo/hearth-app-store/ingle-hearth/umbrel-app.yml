@@ -67,10 +67,8 @@ port: 3252
 # Community-store convention: gallery entries are full hosted image URLs,
 # not bare filenames resolved from a separate assets repo (confirmed against
 # getumbrel/umbrel-community-app-store's template, which uses full imgur
-# URLs). The five JPEGs live alongside this file (1440x900, captured per
-# packaging/umbrel/hearth/GALLERY.md's shot list against a live instance
-# wired to a real node; shot 4 shows the mining dashboard's honest
-# off-state and is worth recapturing with a live regtest worker later).
+# URLs). The five JPEGs live alongside this file (1440x900, captured
+# against a live instance wired to a real node).
 gallery:
   - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/1.jpg
   - https://raw.githubusercontent.com/AlexM223/hearth-app-store/main/ingle-hearth/2.jpg
