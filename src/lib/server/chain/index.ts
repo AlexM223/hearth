@@ -44,6 +44,7 @@ export {
 	getBlockDetail,
 	getBlockTxPage,
 	listRecentBlocks,
+	listBlocksBefore,
 	type BlocksNode,
 	type BlocksElectrumRail
 } from './blocks.js';
@@ -64,3 +65,10 @@ export {
 	type FeeHistogramResult
 } from './mempool.js';
 export { getFeeRecommendation, type FeesNode, type FeesElectrumRail } from './fees.js';
+export {
+	readExplorerSnapshot,
+	refreshExplorerSnapshot,
+	type ExplorerSnapshot,
+	type SnapshotData,
+	type SnapshotNode
+} from './snapshot.js';

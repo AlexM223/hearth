@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDb, closeDb, runMigrations } from '../db/index.js';
 import { clearAllCaches } from './cache.js';
-import { getBlockDetail, getBlockTxPage, listRecentBlocks, type BlocksNode } from './blocks.js';
+import { getBlockDetail, getBlockTxPage, listRecentBlocks, listBlocksBefore, type BlocksNode } from './blocks.js';
 import type { RpcCaller } from '../node/core/rpc.js';
 
 const GENESIS_HEADER_HEX =
@@ -249,5 +249,26 @@ describe('chain/blocks: listRecentBlocks', () => {
 		expect(bad?.richness).toBe('basic');
 		expect(bad?.txCount).toBeNull();
 		expect(good?.richness).toBe('full');
+	});
+});
+
+describe('chain/blocks: listBlocksBefore', () => {
+	it('returns the `limit` blocks strictly before `beforeHeight`, newest first', async () => {
+		const node = mockNode({
+			getblockhash: (params) => `hash${(params as [number])[0]}`,
+			getblockheader: (params) => ({ hash: (params as [string])[0], time: 1_700_000_000 }),
+			getblock: (params) => {
+				const [hash] = params as [string];
+				throw new Error(`core enrichment down for ${hash}`); // force basic rows -- keep the test cheap
+			}
+		});
+		const rows = await listBlocksBefore(node, 100, 3);
+		expect(rows.map((r) => r.hash)).toEqual(['hash99', 'hash98', 'hash97']);
+	});
+
+	it('returns [] when beforeHeight is 0 (nothing exists before genesis)', async () => {
+		const node = mockNode({});
+		const rows = await listBlocksBefore(node, 0, 5);
+		expect(rows).toEqual([]);
 	});
 });

@@ -309,6 +309,23 @@ async function enrichRow(node: BlocksNode, row: HeaderRow, viewerUserId: number 
 	}
 }
 
+async function listBlocksInRange(
+	node: BlocksNode,
+	startHeight: number,
+	endHeight: number,
+	viewerUserId: number | null
+): Promise<BlockSummary[]> {
+	if (endHeight < startHeight) return [];
+	const rangeCount = endHeight - startHeight + 1;
+	const headerRows = await fetchHeaderRows(node, startHeight, rangeCount);
+	headerRows.sort((a, b) => b.height - a.height); // newest first
+
+	const settled = await Promise.allSettled(headerRows.map((row) => enrichRow(node, row, viewerUserId)));
+	return settled
+		.filter((r): r is PromiseFulfilledResult<BlockSummary> => r.status === 'fulfilled')
+		.map((r) => r.value);
+}
+
 /**
  * The last `count` blocks, newest first. Each row enriches independently
  * (`Promise.allSettled` at ROW grain) so one bad row never blanks the list.
@@ -320,16 +337,25 @@ export async function listRecentBlocks(
 ): Promise<BlockSummary[]> {
 	const tip = await node.getTipHeight();
 	if (tip === null) return [];
-
 	const startHeight = Math.max(0, tip - count + 1);
-	const rangeCount = tip - startHeight + 1;
-	const headerRows = await fetchHeaderRows(node, startHeight, rangeCount);
-	headerRows.sort((a, b) => b.height - a.height); // newest first
+	return listBlocksInRange(node, startHeight, tip, viewerUserId);
+}
 
-	const settled = await Promise.allSettled(headerRows.map((row) => enrichRow(node, row, viewerUserId)));
-	return settled
-		.filter((r): r is PromiseFulfilledResult<BlockSummary> => r.status === 'fulfilled')
-		.map((r) => r.value);
+/**
+ * The `limit` blocks strictly before `beforeHeight`, newest first -- backs
+ * the "see all" full paginated block list (§4.1's `/explorer/blocks`) and
+ * `GET /api/chain/blocks?before=&limit=` (§4.2).
+ */
+export async function listBlocksBefore(
+	node: BlocksNode,
+	beforeHeight: number,
+	limit = 25,
+	viewerUserId: number | null = null
+): Promise<BlockSummary[]> {
+	const endHeight = beforeHeight - 1;
+	if (endHeight < 0) return [];
+	const startHeight = Math.max(0, endHeight - limit + 1);
+	return listBlocksInRange(node, startHeight, endHeight, viewerUserId);
 }
 
 /**
