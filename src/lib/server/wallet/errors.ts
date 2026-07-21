@@ -119,3 +119,26 @@ export class NotFoundError extends WalletError {
 		this.name = 'NotFoundError';
 	}
 }
+
+/** Map a wallet-engine error to an HTTP status + safe message for a route. A
+ *  validation error is 400; forbidden 403; not-found 404; broadcast/replace
+ *  conflicts 409; anything else 500 with a generic message (never a stack). */
+export function httpStatusFor(err: unknown): { status: number; message: string } {
+	if (err instanceof NotFoundError) return { status: 404, message: err.message };
+	if (err instanceof ForbiddenError) return { status: 403, message: err.message };
+	if (err instanceof AlreadyBroadcastError || err instanceof AlreadyReplacedError) {
+		return { status: 409, message: err.message };
+	}
+	if (
+		err instanceof InvalidRecipientError ||
+		err instanceof InvalidFeeRateError ||
+		err instanceof InsufficientFundsError ||
+		err instanceof InvalidPsbtError ||
+		err instanceof CommitmentError ||
+		err instanceof NotFullySignedError ||
+		err instanceof WalletError
+	) {
+		return { status: 400, message: err.message };
+	}
+	return { status: 500, message: 'something went wrong' };
+}

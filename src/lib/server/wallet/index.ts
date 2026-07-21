@@ -32,6 +32,8 @@ import type { Wallet, WalletAddress } from './types.js';
 import { selectEngine } from './script/engine.js';
 import { scriptToScripthash } from './derive.js';
 import { hex } from '@scure/base';
+import { getWalletRow, updateCursors } from './repo.js';
+import { NotFoundError } from './errors.js';
 
 /**
  * Derive `count` addresses on a chain starting at `fromIndex` (WALLET-ENGINE
@@ -65,6 +67,37 @@ export function deriveAddresses(
 }
 
 export { selectEngine } from './script/engine.js';
+
+/** The next unused external address, rotating receive_cursor forward (§2.3). */
+export function nextReceiveAddress(userId: number, walletId: number): WalletAddress {
+	const wallet = getWalletRow(userId, walletId);
+	if (!wallet) throw new NotFoundError('wallet not found');
+	const index = wallet.receiveCursor;
+	const [addr] = deriveAddresses(wallet, 0, index, 1);
+	updateCursors(walletId, index + 1, wallet.changeCursor);
+	return addr;
+}
+
+export {
+	resolveWalletRole,
+	redactDraft,
+	draftSummary,
+	type WalletRole,
+	type DraftSummary
+} from './access.js';
+export {
+	WalletError,
+	CommitmentError,
+	InvalidRecipientError,
+	InvalidPsbtError,
+	InsufficientFundsError,
+	InvalidFeeRateError,
+	AlreadyBroadcastError,
+	AlreadyReplacedError,
+	ForbiddenError,
+	NotFoundError,
+	NotFullySignedError
+} from './errors.js';
 
 export {
 	importWallet,
