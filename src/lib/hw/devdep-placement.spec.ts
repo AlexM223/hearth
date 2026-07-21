@@ -60,10 +60,12 @@ describe('T0: Stage-1 transport libs are devDependencies, never dependencies', (
 	it('the built server bundle (build/) contains no .node file, when built', () => {
 		// Best-effort: this fast unit suite doesn't itself trigger `vite build`
 		// (CI's separate build step does, then re-runs `check:native`, which
-		// calls this same scanner). If build/ isn't present, this is a no-op
-		// rather than a false failure/false green.
-		const { scanned, hits } = scanBuiltServerBundle();
-		if (scanned) expect(hits).toEqual([]);
+		// calls this same scanner). When build/ is absent the scanner reports
+		// zero hits, so asserting unconditionally keeps vitest's
+		// require-assertions rule satisfied (a guarded `if (scanned)` expect
+		// failed CI's unit job, which never builds) without a false failure.
+		const { hits } = scanBuiltServerBundle();
+		expect(hits).toEqual([]);
 	});
 });
 
