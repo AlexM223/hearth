@@ -43,10 +43,16 @@ function fundingNode(wallet: Wallet, coinSats: number): BuildNode {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function evt(userId: number | null, params: Record<string, string>, body?: unknown): any {
+function evt(
+	userId: number | null,
+	params: Record<string, string>,
+	body?: unknown,
+	role: 'owner' | 'member' | 'guest' = 'guest'
+): any {
 	return {
-		locals: { user: userId == null ? null : { id: userId, username: 'u' + userId, role: 'guest', mustResetPassword: false } },
+		locals: { user: userId == null ? null : { id: userId, username: 'u' + userId, role, mustResetPassword: false } },
 		params,
+		url: new URL('http://localhost/api/wallets'),
 		request: { json: async () => body }
 	};
 }
@@ -138,5 +144,44 @@ describe('T8: route-level viewer boundary', () => {
 
 	it('an unauthenticated caller => 401 on a PSBT route', async () => {
 		await expectStatus(() => getDraft(evt(null, { id: String(wallet.id), draftId: String(draftId) })), 401);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// M3 extension (COME-ABOARD.md §3.4, §7.1): the org-role floor on the
+// top-level /api/wallets list/import route. A Guest holds no wallet (matrix
+// §3.2 -- ✗); this is Layer 2 (defense in depth) enforcing that even though
+// Layer 1 (hooks.server.ts's API_POLICY) already requires 'member' in real
+// HTTP traffic -- this test calls the handler directly, bypassing hooks.
+import { GET as listWalletsRoute, POST as importWalletRoute } from './+server.js';
+
+describe('M3: /api/wallets top-level -- Guest is denied even calling the handler directly', () => {
+	it('Guest GET /api/wallets => 403 (a Guest holds no wallet)', async () => {
+		await expectStatus(() => listWalletsRoute(evt(viewerId, {}, undefined, 'guest')), 403);
+	});
+
+	it('Guest POST /api/wallets (import) => 403 -- cannot create a wallet for themselves', async () => {
+		await expectStatus(
+			() =>
+				importWalletRoute(
+					evt(viewerId, {}, { name: 'sneaky', xpub: 'zpub-not-even-valid' }, 'guest')
+				),
+			403
+		);
+	});
+
+	it('Owner GET /api/wallets still 200s (regression guard on the fix above)', async () => {
+		const body = (await expectStatus(() => listWalletsRoute(evt(ownerId, {}, undefined, 'owner')), 200)) as {
+			wallets: unknown[];
+		};
+		expect(body.wallets.length).toBe(1);
+	});
+
+	it('Member GET /api/wallets still 200s (own, possibly-empty list)', async () => {
+		await expectStatus(() => listWalletsRoute(evt(viewerId, {}, undefined, 'member')), 200);
+	});
+
+	it('an anonymous caller still gets 401, not 403 (no session beats wrong role)', async () => {
+		await expectStatus(() => listWalletsRoute(evt(null, {})), 401);
 	});
 });

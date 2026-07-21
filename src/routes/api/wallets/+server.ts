@@ -6,10 +6,15 @@
 import { json, error, type RequestEvent } from '@sveltejs/kit';
 import { importWallet, listWallets, getSnapshot, type ImportInput } from '$lib/server/wallet/index.js';
 import { httpStatusFor } from '$lib/server/wallet/errors.js';
+import { requireRole } from '$lib/server/auth/index.js';
 
+/** Layer 2 (COME-ABOARD.md §3.3, defense in depth): a Guest holds no wallet
+ *  (matrix §3.2 -- ✗). Layer 1 (hooks.server.ts's API_POLICY) already
+ *  requires 'member' for every /api/wallets/** path; this makes the service
+ *  enforce the same rule even if that policy line were ever dropped, or if
+ *  this handler is invoked from non-route code (tests, a future SSE bridge). */
 function requireUser(event: RequestEvent): { id: number } {
-	const user = event.locals.user;
-	if (!user) throw error(401, 'sign in first');
+	const user = requireRole(event.locals.user, 'member');
 	return { id: user.id };
 }
 
