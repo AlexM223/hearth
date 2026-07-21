@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/** @param {string} dir @returns {any} */
 function readPkg(dir) {
 	try {
 		return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
@@ -23,7 +24,10 @@ function readPkg(dir) {
 	}
 }
 
-/** Resolve a package's install dir, walking up node_modules like Node does. */
+/**
+ * Resolve a package's install dir, walking up node_modules like Node does.
+ * @param {string} name @param {string} fromDir @returns {string | null}
+ */
 function resolvePkgDir(name, fromDir) {
 	let cur = fromDir;
 	for (;;) {
@@ -35,7 +39,10 @@ function resolvePkgDir(name, fromDir) {
 	}
 }
 
-/** Shallow-ish recursive scan for compiled addons, skipping nested node_modules. */
+/**
+ * Shallow-ish recursive scan for compiled addons, skipping nested node_modules.
+ * @param {string} dir @param {string[]} hits @param {number} [depth]
+ */
 function findNativeArtifacts(dir, hits, depth = 0) {
 	if (depth > 6) return;
 	let entries;
@@ -58,18 +65,22 @@ function findNativeArtifacts(dir, hits, depth = 0) {
 const rootPkg = readPkg(root);
 const prodDeps = Object.keys(rootPkg.dependencies ?? {});
 
+/** @type {Set<string>} */
 const visited = new Set();
+/** @type {string[]} */
 const queue = [...prodDeps];
+/** @type {{ name: string; hits: string[] }[]} */
 const nativeHits = [];
 
 while (queue.length) {
-	const name = queue.shift();
+	const name = /** @type {string} */ (queue.shift());
 	if (visited.has(name)) continue;
 	visited.add(name);
 	const dir = resolvePkgDir(name, root);
 	if (!dir) continue;
 	const pkg = readPkg(dir);
 	if (!pkg) continue;
+	/** @type {string[]} */
 	const hits = [];
 	findNativeArtifacts(dir, hits);
 	if (hits.length) nativeHits.push({ name, hits });
