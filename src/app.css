@@ -1,0 +1,262 @@
+/*
+ * Ingle -- Hearth's design system (DECISIONS.md §3).
+ * "Firelight in a safe, dark room": a warm editorial serif for money, glowing
+ * against a cool graphite field, with one interactive warmth -- the amber
+ * hearth-glow -- as the only accent. Dark is default; warm-parchment light is
+ * a first-class peer, not an afterthought.
+ *
+ * Guardrail (falsifiable, enforced in QA): the accent is candlelight amber,
+ * NOT Bitcoin orange. #f7931a / #f97316 and copper tones are banned.
+ */
+
+@import '@fontsource/hanken-grotesk/400.css';
+@import '@fontsource/hanken-grotesk/500.css';
+@import '@fontsource/hanken-grotesk/600.css';
+@import '@fontsource/newsreader/400.css';
+@import '@fontsource/newsreader/500.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+:root {
+	color-scheme: dark;
+
+	/* -- surfaces: cool graphite luminance stack (dark, the firelit room) -- */
+	--bg: #14161a;
+	--bg-deep: #0e0f13;
+	--bg-input: #1b1e24;
+	--surface: #1b1e24;
+	--surface-elevated: #23272f;
+	--border: rgba(255, 255, 255, 0.1);
+	--border-subtle: rgba(255, 255, 255, 0.07);
+	--hairline: rgba(255, 255, 255, 0.05);
+
+	/* -- text: warm cream money, cool-neutral metadata -- */
+	--text: #ece6da;
+	--text-hero: #f5f0e6;
+	--text-secondary: #a2a4a2;
+	--text-muted: #6d7071;
+	--text-faint: #474a4c;
+
+	/* -- accent: "hearth-glow" amber, the single interactive warmth -- */
+	--accent: #e6ad6b;
+	--accent-hover: #eeb878;
+	--accent-pressed: #d79c5b;
+	--accent-dim: #8a6a3e;
+	--on-accent: #1a1206;
+
+	/* -- semantics: one green, one gold-sibling attention, one red -- */
+	--sage: #84b98f;
+	--success: var(--sage);
+	--attention: #d8b678;
+	--warning: var(--attention);
+	--error: #df6553;
+	--danger: var(--error);
+
+	/* -- type families -- */
+	--font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+	--font-serif: 'Newsreader', Georgia, serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+
+	/* -- five-token type scale -- */
+	--t-hero: 56px;
+	--t-hero-weight: 440;
+	--t-title: 22px;
+	--t-title-weight: 600;
+	--t-body: 15px;
+	--t-body-weight: 400;
+	--t-label: 13px;
+	--t-label-weight: 500;
+	--t-micro: 11px;
+	--t-micro-weight: 500;
+
+	--weight-money: 460;
+
+	/* -- layout grammar: 8px rhythm, hairlines not boxes, pill/panel/input radii -- */
+	--space-1: 8px;
+	--space-2: 12px;
+	--space-3: 16px;
+	--space-4: 24px;
+	--space-5: 32px;
+	--radius-pill: 999px;
+	--radius-panel: 13px;
+	--radius-input: 10px;
+
+	--ease-grow: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Warm-parchment light mode -- first-class peer, not dark-only-as-identity. */
+:root[data-theme='light'] {
+	color-scheme: light;
+
+	--bg: #f4efe6;
+	--bg-deep: #ece4d6;
+	--bg-input: #ffffff;
+	--surface: #ffffff;
+	--surface-elevated: #faf6ef;
+	--border: rgba(32, 36, 42, 0.12);
+	--border-subtle: rgba(32, 36, 42, 0.08);
+	--hairline: rgba(32, 36, 42, 0.06);
+
+	--text: #20242a;
+	--text-hero: #14161a;
+	--text-secondary: #565b52;
+	--text-muted: #7a7f75;
+	--text-faint: #a9ada2;
+
+	--accent: #b5772e;
+	--accent-hover: #c48540;
+	--accent-pressed: #9c6524;
+	--accent-dim: #d2ab7c;
+	--on-accent: #fff8ef;
+
+	--sage: #3f7a56;
+	--attention: #a1793a;
+	--error: #b6402f;
+}
+
+/* "System" theme (no data-theme attribute yet, or explicitly "system"): follow
+   the OS preference. Applied before the pre-paint script resolves localStorage
+   on first paint, and kept as the fallback for prefers-color-scheme: light. */
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme='dark']):not([data-theme='light']) {
+		color-scheme: light;
+		--bg: #f4efe6;
+		--bg-deep: #ece4d6;
+		--bg-input: #ffffff;
+		--surface: #ffffff;
+		--surface-elevated: #faf6ef;
+		--border: rgba(32, 36, 42, 0.12);
+		--border-subtle: rgba(32, 36, 42, 0.08);
+		--hairline: rgba(32, 36, 42, 0.06);
+
+		--text: #20242a;
+		--text-hero: #14161a;
+		--text-secondary: #565b52;
+		--text-muted: #7a7f75;
+		--text-faint: #a9ada2;
+
+		--accent: #b5772e;
+		--accent-hover: #c48540;
+		--accent-pressed: #9c6524;
+		--accent-dim: #d2ab7c;
+		--on-accent: #fff8ef;
+
+		--sage: #3f7a56;
+		--attention: #a1793a;
+		--error: #b6402f;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-ui);
+	font-size: var(--t-body);
+	font-weight: var(--t-body-weight);
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: inherit;
+}
+
+/* -- shared type-scale utility classes -- */
+.t-hero {
+	font-family: var(--font-serif);
+	font-size: var(--t-hero);
+	font-weight: var(--t-hero-weight);
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-hero);
+}
+
+.t-title {
+	font-family: var(--font-ui);
+	font-size: var(--t-title);
+	font-weight: var(--t-title-weight);
+}
+
+.t-label {
+	font-family: var(--font-ui);
+	font-size: var(--t-label);
+	font-weight: var(--t-label-weight);
+	color: var(--text-secondary);
+}
+
+.t-micro {
+	font-family: var(--font-ui);
+	font-size: var(--t-micro);
+	font-weight: var(--t-micro-weight);
+	text-transform: uppercase;
+	letter-spacing: 0.09em;
+	color: var(--text-muted);
+}
+
+.t-mono {
+	font-family: var(--font-mono);
+}
+
+/* -- "instrument glass" panel: hairlines not boxes, borders not shadows -- */
+.panel {
+	background: var(--surface);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-panel);
+	padding: var(--space-4);
+}
+
+.hairline {
+	border-bottom: 1px solid var(--hairline);
+}
+
+.btn-primary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-1);
+	background: var(--accent);
+	color: var(--on-accent);
+	border: none;
+	border-radius: var(--radius-pill);
+	padding: 10px 20px;
+	font-family: var(--font-ui);
+	font-size: var(--t-body);
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background 0.15s var(--ease-grow),
+		transform 0.15s var(--ease-grow);
+}
+
+.btn-primary:hover {
+	background: var(--accent-hover);
+}
+
+.btn-primary:active {
+	background: var(--accent-pressed);
+}
+
+.badge-no-cloud {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-family: var(--font-ui);
+	font-size: var(--t-micro);
+	font-weight: var(--t-micro-weight);
+	text-transform: uppercase;
+	letter-spacing: 0.09em;
+	color: var(--text-muted);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-pill);
+	padding: 6px 12px;
+}
