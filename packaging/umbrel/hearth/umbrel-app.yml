@@ -32,7 +32,7 @@ description: >-
   will ask you to accept its certificate the first time you open it, and
   it's safe to ignore until that feature ships. If you turn on the solo
   mining pool (off by default), your miner (e.g. a Bitaxe) connects to this
-  box on port 3343 (standard difficulty) or 3344 (ASIC-floor difficulty);
+  box on port 3343 (standard difficulty) or 3345 (ASIC-floor difficulty);
   nothing listens on either port until mining is enabled.
 
 

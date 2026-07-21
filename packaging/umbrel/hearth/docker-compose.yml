@@ -38,7 +38,7 @@ services:
       # and can't proxy raw TCP. Only reachable once mining is enabled AND
       # bind is set to lan/all; harmless (nothing listening) until then.
       #
-      # Host ports are 3343/3344, NOT the container-internal 3333/3334
+      # Host ports are 3343/3345, NOT the container-internal 3333/3334
       # (hearth-ny4.1): cairn/Heartwood already publishes host 3333/3334 on
       # the same box, so reusing them here would collide the instant both
       # apps run together -- the identical precedent already set for the
@@ -48,12 +48,20 @@ services:
       # built here, never repurposed -- MINING-ENGINE.md §9.4). The
       # CONTAINER side of the mapping stays the real listener ports 3333/
       # 3334 unchanged; only the HOST-side numbers move. A Bitaxe/miner
-      # pointed at this box connects to host 3343 (standard) / 3344
+      # pointed at this box connects to host 3343 (standard) / 3345
       # (ASIC-floor) -- the dashboard's off-state connection instructions
       # (MINING-ENGINE.md §6.4) render whichever port is actually resolved,
       # so this is the one place that literal number needs to stay in sync.
+      #
+      # Host 3344 (the obvious next number after 3343) was NOT used for
+      # ASIC-floor: M7's store-lint pass against a real getumbrel/umbrel-apps
+      # checkout found it collides with `blockstream-blind-oracle`'s manifest
+      # `port: 3344` (its app_proxy browser port) -- both can't bind host
+      # 3344 if a user ever installs both apps on the same box. 3345 is
+      # confirmed clear of every manifest `port:` and every raw compose host
+      # port in the official app store as of this check.
       - "3343:3333" # standard (host 3343 -> container 3333)
-      - "3344:3334" # ASIC-floor (host 3344 -> container 3334)
+      - "3345:3334" # ASIC-floor (host 3345 -> container 3334)
     volumes:
       - ${APP_DATA_DIR}/data:/data
     environment:
@@ -70,12 +78,14 @@ services:
       HEARTH_ORIGIN: http://${DEVICE_DOMAIN_NAME}:3252
       # Advertised HTTPS port, since the published host port (4489) differs from 3443.
       HEARTH_HTTPS_EXTERNAL_PORT: 4489
-      # Advertised Stratum ports (hearth-ny4.1): the mining dashboard's
-      # connection card must tell a miner to dial the PUBLISHED host port
-      # (3343/3344), not the container-internal listening port (3333/3334) --
-      # see mining/settings.ts's advertisedStratumPort.
+      # Advertised Stratum ports (hearth-ny4.1, host port for ASIC-floor
+      # moved 3344->3345 in M7 -- see the ports: block comment above): the
+      # mining dashboard's connection card must tell a miner to dial the
+      # PUBLISHED host port (3343/3345), not the container-internal
+      # listening port (3333/3334) -- see mining/settings.ts's
+      # advertisedStratumPort.
       HEARTH_MINING_STRATUM_EXTERNAL_PORT: 3343
-      HEARTH_MINING_ASIC_EXTERNAL_PORT: 3344
+      HEARTH_MINING_ASIC_EXTERNAL_PORT: 3345
       # Better client IPs for rate-limiting/audit behind the proxy; safely ignored if absent.
       ADDRESS_HEADER: x-forwarded-for
       # --- auto-wired Core RPC, never a hand-typed connection string (DECISIONS.md §5.3) ---
