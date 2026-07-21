@@ -6,6 +6,16 @@
 
 	let { data, children }: LayoutProps = $props();
 
+	// Mobile nav collapse (UX sweep hearth-71z, finding #2): below ~768px the
+	// nav links / search / actions hide behind this disclosure toggle instead
+	// of forcing horizontal scroll (the sweep measured ~955px of un-collapsing
+	// chrome at a 375px viewport). Desktop is untouched -- the toggle itself
+	// is display:none above the breakpoint (see the style block below).
+	let mobileMenuOpen = $state(false);
+	function closeMobileMenu() {
+		mobileMenuOpen = false;
+	}
+
 	const nav = [
 		{ href: '/', label: 'Home' },
 		{ href: '/wallets', label: 'Wallets' },
@@ -57,19 +67,29 @@
 </script>
 
 <div class="shell">
-	<header class="topnav hairline">
-		<a class="brand t-title" href="/">
+	<header class="topnav hairline" class:menu-open={mobileMenuOpen}>
+		<a class="brand t-title" href="/" onclick={closeMobileMenu}>
 			<span class="brand-mark" aria-hidden="true"></span>
 			Hearth
 		</a>
 
+		<button
+			class="menu-toggle"
+			type="button"
+			aria-expanded={mobileMenuOpen}
+			aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+			onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
+		>
+			{mobileMenuOpen ? '✕ Close' : '☰ Menu'}
+		</button>
+
 		<nav>
 			{#each nav as item (item.href)}
-				<a href={item.href} class:active={isActive(item.href)}>{item.label}</a>
+				<a href={item.href} class:active={isActive(item.href)} onclick={closeMobileMenu}>{item.label}</a>
 			{/each}
 		</nav>
 
-		<form class="search" onsubmit={(e) => (e.preventDefault(), runSearch())}>
+		<form class="search" onsubmit={(e) => (e.preventDefault(), runSearch(), closeMobileMenu())}>
 			<input
 				class="search-input t-mono"
 				type="search"
@@ -86,11 +106,21 @@
 		<div class="topnav-actions">
 			<span class="badge-no-cloud">No cloud &middot; No telemetry</span>
 			{#if data.user?.role === 'owner'}
-				<a href="/settings" class:active={isActive('/settings')} class="settings-link" title="Settings"
-					>Settings</a
+				<a
+					href="/settings"
+					class:active={isActive('/settings')}
+					class="settings-link"
+					title="Settings"
+					onclick={closeMobileMenu}>Settings</a
 				>
 			{:else if data.user}
-				<a href="/me" class:active={isActive('/me')} class="settings-link" title="My profile">My profile</a>
+				<a
+					href="/me"
+					class:active={isActive('/me')}
+					class="settings-link"
+					title="My profile"
+					onclick={closeMobileMenu}>My profile</a
+				>
 			{/if}
 			{#if data.user}
 				<span class="username t-label">{data.user.username}</span>
@@ -247,5 +277,80 @@
 		max-width: 1100px;
 		width: 100%;
 		margin: 0 auto;
+	}
+
+	.menu-toggle {
+		display: none;
+	}
+
+	/* Mobile nav collapse (hearth-71z, UX sweep finding #2). Below this
+	   breakpoint the nav links / search / actions hide behind the disclosure
+	   toggle instead of forcing the ~955px of un-collapsing chrome the sweep
+	   measured at a 375px viewport into a single row. */
+	@media (max-width: 768px) {
+		.topnav {
+			flex-wrap: wrap;
+			row-gap: var(--space-2);
+		}
+
+		.menu-toggle {
+			display: inline-flex;
+			align-items: center;
+			order: 1;
+			margin-left: auto;
+			background: none;
+			border: 1px solid var(--border-subtle);
+			border-radius: var(--radius-pill);
+			padding: 6px 14px;
+			color: var(--text-secondary);
+			font-family: var(--font-ui);
+			font-size: var(--t-label);
+			cursor: pointer;
+		}
+
+		nav {
+			order: 2;
+			flex: 1 1 100%;
+			display: none;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.search {
+			order: 3;
+			flex: 1 1 100%;
+			display: none;
+		}
+
+		.search-input {
+			width: 100%;
+			flex: 1;
+		}
+
+		.search-notice {
+			position: static;
+			margin-top: 0;
+		}
+
+		.topnav-actions {
+			order: 4;
+			flex: 1 1 100%;
+			display: none;
+			flex-wrap: wrap;
+			align-items: center;
+			row-gap: var(--space-2);
+		}
+
+		.topnav-actions .badge-no-cloud {
+			flex: 1 1 100%;
+			justify-content: center;
+		}
+
+		/* Only the open menu reveals these -- collapsed by default above. */
+		.topnav.menu-open nav,
+		.topnav.menu-open .search,
+		.topnav.menu-open .topnav-actions {
+			display: flex;
+		}
 	}
 </style>

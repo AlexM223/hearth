@@ -301,6 +301,8 @@
 	.block-row {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
+		row-gap: 4px;
 		gap: var(--space-3);
 		padding: 10px 0;
 		text-decoration: none;

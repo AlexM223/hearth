@@ -106,7 +106,7 @@
 			<li class="panel wallet-card">
 				<a href={`/wallets/${w.id}`}>
 					<div class="wallet-top">
-						<span class="t-title">{w.name}</span>
+						<span class="t-title wallet-name">{w.name}</span>
 						<span class="badge t-label">{kindLabel(w.kind, w.threshold, w.keyCount)}</span>
 					</div>
 					<p class="balance">
@@ -181,6 +181,12 @@
 		align-items: center;
 		gap: var(--space-2);
 	}
+	.wallet-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.badge {
 		background: var(--surface-elevated);
 		border: 1px solid var(--border-subtle);
@@ -188,6 +194,7 @@
 		padding: 2px 10px;
 		color: var(--text-secondary);
 		white-space: nowrap;
+		flex-shrink: 0;
 	}
 	.balance {
 		font-family: var(--font-serif);

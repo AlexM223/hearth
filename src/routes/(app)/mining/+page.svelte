@@ -175,31 +175,33 @@
 			{#if data.mine.workers.length === 0}
 				<p class="t-label">No workers connected yet.</p>
 			{:else}
-				<table>
-					<thead>
-						<tr class="t-label">
-							<th>Worker</th>
-							<th>Hashrate</th>
-							<th>Last share</th>
-							<th>Shares</th>
-							<th>Best</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.mine.workers as w (w.name)}
-							<tr class="hairline">
-								<td class="t-label">
-									<span class="dot" class:dot-ok={w.online} class:dot-down={!w.online}></span>
-									{w.name}
-								</td>
-								<td class="t-mono">{formatHashrate(w.hashrate.now)}</td>
-								<td class="t-label">{timeAgo(w.lastShareAgoSec)}</td>
-								<td class="t-mono">{w.shares.accepted}</td>
-								<td class="t-mono">{Math.round(w.bestShareDifficulty).toLocaleString()}</td>
+				<div class="table-scroll">
+					<table>
+						<thead>
+							<tr class="t-label">
+								<th>Worker</th>
+								<th>Hashrate</th>
+								<th>Last share</th>
+								<th>Shares</th>
+								<th>Best</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each data.mine.workers as w (w.name)}
+								<tr class="hairline">
+									<td class="t-label">
+										<span class="dot" class:dot-ok={w.online} class:dot-down={!w.online}></span>
+										{w.name}
+									</td>
+									<td class="t-mono">{formatHashrate(w.hashrate.now)}</td>
+									<td class="t-label">{timeAgo(w.lastShareAgoSec)}</td>
+									<td class="t-mono">{w.shares.accepted}</td>
+									<td class="t-mono">{Math.round(w.bestShareDifficulty).toLocaleString()}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			{/if}
 		</section>
 
@@ -287,21 +289,23 @@
 			<path d={adminChartPath} fill="none" stroke="var(--text-secondary)" stroke-width="1.5" />
 		</svg>
 
-		<table>
-			<thead>
-				<tr class="t-label"><th>Miner</th><th>Worker</th><th>Hashrate</th><th>Last share</th></tr>
-			</thead>
-			<tbody>
-				{#each data.admin.miners as m (`${m.userId}:${m.worker}`)}
-					<tr class="hairline">
-						<td class="t-label">{m.userName}</td>
-						<td class="t-label">{m.worker}</td>
-						<td class="t-mono">{formatHashrate(m.hashrate)}</td>
-						<td class="t-label">{timeAgo(m.lastShareAgoSec)}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+		<div class="table-scroll">
+			<table>
+				<thead>
+					<tr class="t-label"><th>Miner</th><th>Worker</th><th>Hashrate</th><th>Last share</th></tr>
+				</thead>
+				<tbody>
+					{#each data.admin.miners as m (`${m.userId}:${m.worker}`)}
+						<tr class="hairline">
+							<td class="t-label">{m.userName}</td>
+							<td class="t-label">{m.worker}</td>
+							<td class="t-mono">{formatHashrate(m.hashrate)}</td>
+							<td class="t-label">{timeAgo(m.lastShareAgoSec)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 
 		<form method="POST" action="?/saveSettings" use:enhance class="settings-form">
 			<label class="toggle">
@@ -395,6 +399,10 @@
 
 	.odds {
 		margin-top: var(--space-2);
+	}
+
+	.table-scroll {
+		overflow-x: auto;
 	}
 
 	table {

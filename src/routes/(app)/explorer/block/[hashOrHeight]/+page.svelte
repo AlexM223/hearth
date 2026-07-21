@@ -255,6 +255,8 @@
 		align-items: center;
 		gap: var(--space-3);
 		padding: 10px 0;
+		flex-wrap: wrap;
+		row-gap: 4px;
 		text-decoration: none;
 		color: var(--text);
 	}

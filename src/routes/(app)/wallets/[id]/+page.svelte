@@ -333,6 +333,8 @@
 		align-items: center;
 		gap: var(--space-3);
 		padding: 10px 0;
+		flex-wrap: wrap;
+		row-gap: 4px;
 	}
 	.amt {
 		font-variant-numeric: tabular-nums;
