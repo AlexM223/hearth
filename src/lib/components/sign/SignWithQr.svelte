@@ -9,15 +9,18 @@
 	import { encodePsbtToFramesDetailed, PsbtQrJoiner } from '$lib/hw/bbqr.js';
 	import { startScan, type ScanHandle } from '$lib/hw/qrScan.js';
 	import { cameraScanUnavailableReason } from '$lib/hw/secureContext.js';
+	import SecureContextNudge from './SecureContextNudge.svelte';
 
 	let {
 		psbt,
 		onsigned,
-		onerror
+		onerror,
+		httpsExternalPort = null
 	}: {
 		psbt: string;
 		onsigned: (signedPsbtBase64: string) => void;
 		onerror: (message: string) => void;
+		httpsExternalPort?: number | null;
 	} = $props();
 
 	type Half = 'show' | 'scan';
@@ -137,11 +140,15 @@
 	{:else if unavailableReason === 'unsupported-browser'}
 		<p class="t-label muted">QR scan needs Chrome, Edge, or Brave -- or use Sign with file.</p>
 	{:else}
-		<!-- 'insecure-context' (a full nudge lands at T3) and 'no-camera' both
-		     fall back to a paste box so the flow never dead-ends. -->
+		{#if unavailableReason === 'insecure-context'}
+			<SecureContextNudge what="Camera scanning" {httpsExternalPort} />
+		{/if}
+		<!-- Either way (insecure-context OR no-camera), a paste fallback keeps
+		     the flow from dead-ending -- SIGNING.md §2.2.3 offers the nudge OR
+		     the paste box for the insecure-context case; both together here. -->
 		<p class="t-label muted">
 			{unavailableReason === 'insecure-context'
-				? 'Camera scanning needs a secure connection. Paste the signed transaction text instead:'
+				? 'Or paste the signed transaction text instead:'
 				: 'No camera found. Paste the signed transaction text instead:'}
 		</p>
 		<textarea class="paste mono" rows="4" bind:value={pasteText} placeholder="Paste the signed transaction…"

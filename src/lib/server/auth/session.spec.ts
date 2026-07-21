@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDb, closeDb, runMigrations, getDb } from '../db/index.js';
 import {
 	SESSION_COOKIE,
@@ -7,6 +7,7 @@ import {
 	destroySession,
 	destroyUserSessions,
 	cookieSecure,
+	setSessionCookie,
 	hashToken
 } from './session.js';
 
@@ -111,5 +112,48 @@ describe('auth: cookieSecure (the app_proxy plain-HTTP fix, DECISIONS.md §5.2)'
 	it('falls back to the request protocol on a malformed HEARTH_ORIGIN', () => {
 		process.env.HEARTH_ORIGIN = 'not a url';
 		expect(cookieSecure(new URL('https://example.com'))).toBe(true);
+	});
+});
+
+describe('auth: setSessionCookie shape -- the origin-hop hard rule (SIGNING.md §4.4)', () => {
+	// The session cookie MUST stay SameSite=Lax, non-Secure on plain-HTTP
+	// deployments, and host-scoped (no Domain attribute) -- "hardening" any of
+	// these silently breaks either the HTTP->HTTPS signing-surface hop or
+	// plain-HTTP login entirely. Pinned here as a structural regression test
+	// on the exact options object handed to `cookies.set`.
+	it('sets path=/, httpOnly, sameSite=lax, and NEVER a domain attribute', () => {
+		const set = vi.fn();
+		const cookies = { set } as unknown as import('@sveltejs/kit').Cookies;
+		setSessionCookie(cookies, 'tok', new Date(Date.now() + 1000), new URL('http://umbrel.local:3252/'));
+
+		expect(set).toHaveBeenCalledTimes(1);
+		const [name, value, opts] = set.mock.calls[0];
+		expect(name).toBe(SESSION_COOKIE);
+		expect(value).toBe('tok');
+		expect(opts).toMatchObject({ path: '/', httpOnly: true, sameSite: 'lax', secure: false });
+		expect(opts).not.toHaveProperty('domain');
+	});
+
+	it('is non-Secure on a plain-HTTP declared origin even when called from the HTTPS hop URL', () => {
+		// The hop is http://host:3252 -> https://host:4489; the cookie the
+		// browser already carries was minted non-Secure (HEARTH_ORIGIN is
+		// http:), so it must stay valid on the https request too -- a
+		// Secure=true cookie set here would still be ACCEPTED over https, but
+		// asserting non-Secure pins that this path never "upgrades" the
+		// cookie based on the request URL's own scheme (cookieSecure follows
+		// the DECLARED origin, not the request).
+		const originalOrigin = process.env.HEARTH_ORIGIN;
+		process.env.HEARTH_ORIGIN = 'http://umbrel.local:3252';
+		try {
+			const set = vi.fn();
+			const cookies = { set } as unknown as import('@sveltejs/kit').Cookies;
+			setSessionCookie(cookies, 'tok', new Date(Date.now() + 1000), new URL('https://umbrel.local:4489/wallets/1'));
+			const [, , opts] = set.mock.calls[0];
+			expect(opts.secure).toBe(false);
+			expect(opts.sameSite).toBe('lax');
+		} finally {
+			if (originalOrigin === undefined) delete process.env.HEARTH_ORIGIN;
+			else process.env.HEARTH_ORIGIN = originalOrigin;
+		}
 	});
 });

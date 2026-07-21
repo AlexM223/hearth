@@ -90,9 +90,9 @@
 			{#if method === 'file'}
 				<SignWithFile {walletId} {draftId} {psbt} onsigned={submitSignedPsbt} {onerror} />
 			{:else if method === 'qr'}
-				<SignWithQr {psbt} onsigned={submitSignedPsbt} {onerror} />
+				<SignWithQr {psbt} onsigned={submitSignedPsbt} {onerror} {httpsExternalPort} />
 			{:else}
-				<SignWithDevice {psbt} onsigned={submitSignedPsbt} {onerror} />
+				<SignWithDevice {psbt} onsigned={submitSignedPsbt} {onerror} {httpsExternalPort} />
 			{/if}
 		</div>
 	{/if}
