@@ -123,6 +123,15 @@ export {
 	type ImportInput
 } from './import.js';
 export {
+	parseWalletConfig,
+	buildWalletBackup,
+	ConfigParseError,
+	HEARTH_BACKUP_FORMAT,
+	type ParsedWalletConfig,
+	type ConfigWalletPlan,
+	type ConfigFormat
+} from './configImport.js';
+export {
 	addDescriptorChecksum,
 	computeDescriptorChecksum,
 	verifyDescriptorChecksum,

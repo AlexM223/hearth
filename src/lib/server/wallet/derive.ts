@@ -17,6 +17,7 @@ import { base58, base58check, bech32, bech32m, hex } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { ripemd160 } from '@noble/hashes/legacy.js';
 import type { ChainNetwork, ScriptType, SingleScriptType } from './types.js';
+import { WalletError } from './errors.js';
 
 const b58check = base58check(sha256);
 
@@ -67,13 +68,17 @@ export function networkParams(network: ChainNetwork): NetworkParams {
 // ------------------------------------------------------------- SLIP-132 table
 
 interface VersionInfo {
-	scriptType: SingleScriptType;
+	scriptType: ScriptType;
 	network: ChainNetwork;
 	isPrivate: boolean;
 }
 
 // Public + private SLIP-132 version bytes. Private ones exist ONLY so we can
-// reject them loudly (never parse); we never emit a private key.
+// reject them loudly (never parse); we never emit a private key. The
+// capital-letter multisig variants (Ypub/Zpub/Upub/Vpub) are what Coldcard
+// and Sparrow emit in multisig export files -- they normalize to the same
+// standard xpub/tpub, carrying a MULTISIG script hint instead of a
+// single-sig one.
 const VERSION_TABLE: Record<number, VersionInfo> = {
 	0x0488b21e: { scriptType: 'p2pkh', network: 'mainnet', isPrivate: false }, // xpub
 	0x0488ade4: { scriptType: 'p2pkh', network: 'mainnet', isPrivate: true }, // xprv
@@ -81,15 +86,26 @@ const VERSION_TABLE: Record<number, VersionInfo> = {
 	0x049d7878: { scriptType: 'p2sh-p2wpkh', network: 'mainnet', isPrivate: true }, // yprv
 	0x04b24746: { scriptType: 'p2wpkh', network: 'mainnet', isPrivate: false }, // zpub
 	0x04b2430c: { scriptType: 'p2wpkh', network: 'mainnet', isPrivate: true }, // zprv
+	0x0295b43f: { scriptType: 'p2sh-p2wsh', network: 'mainnet', isPrivate: false }, // Ypub
+	0x0295b005: { scriptType: 'p2sh-p2wsh', network: 'mainnet', isPrivate: true }, // Yprv
+	0x02aa7ed3: { scriptType: 'p2wsh', network: 'mainnet', isPrivate: false }, // Zpub
+	0x02aa7a99: { scriptType: 'p2wsh', network: 'mainnet', isPrivate: true }, // Zprv
 	0x043587cf: { scriptType: 'p2pkh', network: 'testnet', isPrivate: false }, // tpub
 	0x04358394: { scriptType: 'p2pkh', network: 'testnet', isPrivate: true }, // tprv
 	0x044a5262: { scriptType: 'p2sh-p2wpkh', network: 'testnet', isPrivate: false }, // upub
 	0x044a4e28: { scriptType: 'p2sh-p2wpkh', network: 'testnet', isPrivate: true }, // uprv
 	0x045f1cf6: { scriptType: 'p2wpkh', network: 'testnet', isPrivate: false }, // vpub
-	0x045f18bc: { scriptType: 'p2wpkh', network: 'testnet', isPrivate: true } // vprv
+	0x045f18bc: { scriptType: 'p2wpkh', network: 'testnet', isPrivate: true }, // vprv
+	0x024289ef: { scriptType: 'p2sh-p2wsh', network: 'testnet', isPrivate: false }, // Upub
+	0x024285b5: { scriptType: 'p2sh-p2wsh', network: 'testnet', isPrivate: true }, // Uprv
+	0x02575483: { scriptType: 'p2wsh', network: 'testnet', isPrivate: false }, // Vpub
+	0x02575048: { scriptType: 'p2wsh', network: 'testnet', isPrivate: true } // Vprv
 };
 
-export class PrivateKeyRejectedError extends Error {
+// Both extend WalletError so httpStatusFor() maps them to a 400 with the real
+// message -- as plain Errors they fell through to a 500 "something went
+// wrong", hiding the useful "not a valid base58 extended key" from the UI.
+export class PrivateKeyRejectedError extends WalletError {
 	constructor() {
 		// NEVER include the key material in the message (WALLET-ENGINE §6.1 xpub suite).
 		super('a private extended key (xprv/yprv/zprv/...) was supplied; import a PUBLIC key (xpub) only');
@@ -97,7 +113,7 @@ export class PrivateKeyRejectedError extends Error {
 	}
 }
 
-export class InvalidKeyError extends Error {
+export class InvalidKeyError extends WalletError {
 	constructor(message: string) {
 		super(message);
 		this.name = 'InvalidKeyError';
@@ -108,8 +124,10 @@ export interface ParsedXpub {
 	hdkey: HDKey;
 	/** Normalized standard-version xpub/tpub string. */
 	normalizedXpub: string;
-	/** Script type inferred from SLIP-132 version bytes (single-sig only). */
-	inferredScriptType: SingleScriptType;
+	/** Script type inferred from SLIP-132 version bytes. Multisig types
+	 *  (p2wsh/p2sh-p2wsh, from Zpub/Ypub/Upub/Vpub) mean "this key belongs in
+	 *  a multisig config" -- a bare single-sig import must reject them. */
+	inferredScriptType: ScriptType;
 	network: ChainNetwork;
 	/** The xpub's own fingerprint (hash160(pubkey)[:4]) -- a fallback origin fp. */
 	selfFingerprint: string;

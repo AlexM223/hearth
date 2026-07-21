@@ -308,6 +308,15 @@ export function importWallet(userId: number, input: ImportInput): Wallet {
 	} else if (input.xpub) {
 		// Single-sig via xpub -- infer script type from SLIP-132 unless overridden.
 		const info = parseXpub(input.xpub);
+		if (
+			!input.scriptType &&
+			(info.inferredScriptType === 'p2wsh' || info.inferredScriptType === 'p2sh-p2wsh')
+		) {
+			throw new ImportError(
+				'that is a MULTISIG extended key (Zpub/Ypub) -- import the full multisig config ' +
+					'(Caravan/Coldcard/Sparrow file or wsh(sortedmulti(...)) descriptor) instead of the bare key'
+			);
+		}
 		const scriptType = (input.scriptType ?? info.inferredScriptType) as SingleScriptType;
 		const network = input.network ?? info.network;
 		const key: ParsedKey = {

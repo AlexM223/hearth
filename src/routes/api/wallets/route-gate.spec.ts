@@ -10,7 +10,13 @@ import { DatabaseSync } from 'node:sqlite';
 import { HDKey } from '@scure/bip32';
 import { openDb, closeDb } from '$lib/server/db/index.js';
 import { runMigrations } from '$lib/server/db/migrations.js';
-import { importWallet, buildPsbt, deriveAddresses, type BuildNode } from '$lib/server/wallet/index.js';
+import {
+	importWallet,
+	buildPsbt,
+	deriveAddresses,
+	walletToDescriptor,
+	type BuildNode
+} from '$lib/server/wallet/index.js';
 import type { Wallet } from '$lib/server/wallet/index.js';
 import { GET as getDraft } from './[id]/drafts/[draftId]/+server.js';
 import { GET as listDrafts } from './[id]/drafts/+server.js';
@@ -183,5 +189,53 @@ describe('M3: /api/wallets top-level -- Guest is denied even calling the handler
 
 	it('an anonymous caller still gets 401, not 403 (no session beats wrong role)', async () => {
 		await expectStatus(() => listWalletsRoute(evt(null, {})), 401);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Universal import surface: parse-config (preview, never persists) and the
+// wallet-backup download carry the same member floor as the rest of the tree.
+import { POST as parseConfigRoute } from './parse-config/+server.js';
+import { GET as backupRoute } from './backup/+server.js';
+
+describe('universal import: /api/wallets/parse-config + /api/wallets/backup gates', () => {
+	it('Guest POST parse-config => 403', async () => {
+		await expectStatus(() => parseConfigRoute(evt(viewerId, {}, { content: 'wpkh(x)' }, 'guest')), 403);
+	});
+
+	it('anonymous POST parse-config => 401', async () => {
+		await expectStatus(() => parseConfigRoute(evt(null, {}, { content: 'wpkh(x)' })), 401);
+	});
+
+	it('Owner POST parse-config previews a descriptor without persisting', async () => {
+		const desc = walletToDescriptor(wallet, 0);
+		const body = (await expectStatus(
+			() => parseConfigRoute(evt(ownerId, {}, { content: desc }, 'owner')),
+			200
+		)) as { format: string; wallets: { preview: { kind: string } }[] };
+		expect(body.format).toBe('descriptor');
+		expect(body.wallets[0].preview.kind).toBe('single');
+	});
+
+	it('garbage content is a 400 with a named-formats message, not a 500', async () => {
+		const body = (await expectStatus(
+			() => parseConfigRoute(evt(ownerId, {}, { content: 'hello world' }, 'owner')),
+			400
+		)) as { message?: string };
+		expect(String(body?.message ?? '')).toMatch(/Caravan/);
+	});
+
+	it('Guest GET backup => 403; Owner without... with wallets gets the file', async () => {
+		await expectStatus(() => backupRoute(evt(viewerId, {}, undefined, 'guest')), 403);
+		const body = (await expectStatus(() => backupRoute(evt(ownerId, {}, undefined, 'owner')), 200)) as {
+			format: string;
+			wallets: unknown[];
+		};
+		expect(body.format).toBe('hearth-wallet-backup');
+		expect(body.wallets.length).toBe(1);
+	});
+
+	it('Member with no wallets gets a 404, not an empty backup', async () => {
+		await expectStatus(() => backupRoute(evt(viewerId, {}, undefined, 'member')), 404);
 	});
 });
