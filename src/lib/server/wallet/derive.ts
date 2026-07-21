@@ -29,6 +29,10 @@ export interface NetworkParams {
 	scriptHash: number;
 	/** Standard BIP-32 public version bytes for this network (for SLIP-132 normalize). */
 	xpubVersion: number;
+	/** Standard BIP-32 private version bytes for this network (xprv/tprv) -- needed
+	 *  ONLY to hand @scure/bip32 a matching `{public,private}` versions pair (see
+	 *  hearth-ny4.11 below); a private key is never parsed or emitted here. */
+	xprvVersion: number;
 }
 
 const MAINNET: NetworkParams = {
@@ -36,21 +40,24 @@ const MAINNET: NetworkParams = {
 	bech32Hrp: 'bc',
 	pubKeyHash: 0x00,
 	scriptHash: 0x05,
-	xpubVersion: 0x0488b21e
+	xpubVersion: 0x0488b21e,
+	xprvVersion: 0x0488ade4
 };
 const TESTNET: NetworkParams = {
 	network: 'testnet',
 	bech32Hrp: 'tb',
 	pubKeyHash: 0x6f,
 	scriptHash: 0xc4,
-	xpubVersion: 0x043587cf
+	xpubVersion: 0x043587cf,
+	xprvVersion: 0x04358394
 };
 const REGTEST: NetworkParams = {
 	network: 'regtest',
 	bech32Hrp: 'bcrt',
 	pubKeyHash: 0x6f,
 	scriptHash: 0xc4,
-	xpubVersion: 0x043587cf
+	xpubVersion: 0x043587cf,
+	xprvVersion: 0x04358394
 };
 
 export function networkParams(network: ChainNetwork): NetworkParams {
@@ -160,7 +167,16 @@ export function parseXpub(raw: string): ParsedXpub {
 
 	let hdkey: HDKey;
 	try {
-		hdkey = HDKey.fromExtendedKey(normalizedXpub);
+		// hearth-ny4.11: @scure/bip32's HDKey.fromExtendedKey() defaults its
+		// `versions` argument to MAINNET-only {public:0x0488b21e,
+		// private:0x0488ade4} and throws "Version mismatch" whenever the
+		// decoded version byte doesn't match. normalizedXpub above is correctly
+		// re-stamped with `net.xpubVersion` (0x043587cf for testnet/regtest --
+		// tpub/upub/vpub all normalize to a tpub-prefixed string), but omitting
+		// the matching `versions` here left every non-mainnet import throwing
+		// on this line, even though the bytes were valid. Must pass the
+		// network's own {public,private} version pair so the check passes.
+		hdkey = HDKey.fromExtendedKey(normalizedXpub, { public: net.xpubVersion, private: net.xprvVersion });
 	} catch {
 		throw new InvalidKeyError('extended key could not be parsed');
 	}

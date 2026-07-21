@@ -8,10 +8,29 @@
 import { describe, expect, it } from 'vitest';
 import * as btc from '@scure/btc-signer';
 import { HDKey } from '@scure/bip32';
-import { hex } from '@scure/base';
+import { base58check, hex } from '@scure/base';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { deriveAddresses } from './index.js';
 import { parseXpub, PrivateKeyRejectedError, InvalidKeyError } from './derive.js';
 import type { ScriptType, ChainNetwork, Wallet } from './types.js';
+
+const b58check = base58check(sha256);
+
+/**
+ * Re-stamp a real BIP-32 extended PUBLIC key's version bytes, independent of
+ * derive.ts's own normalize logic -- so the regression test below exercises
+ * an authentic base58check-valid tpub/upub/vpub, not a string parseXpub
+ * produced itself. Payload layout: version(4) || depth..key(74).
+ */
+function restampVersion(xpub: string, version: number): string {
+	const payload = b58check.decode(xpub);
+	const restamped = new Uint8Array(payload);
+	restamped[0] = (version >>> 24) & 0xff;
+	restamped[1] = (version >>> 16) & 0xff;
+	restamped[2] = (version >>> 8) & 0xff;
+	restamped[3] = version & 0xff;
+	return b58check.encode(restamped);
+}
 
 function wallet(scriptType: ScriptType, xpub: string, network: ChainNetwork = 'mainnet'): Wallet {
 	return {
@@ -103,6 +122,64 @@ describe('T1: ECC-free encoding cross-checks @scure/btc-signer payment builders'
 			}
 		});
 	}
+});
+
+describe('hearth-ny4.11 regression: real testnet tpub/upub/vpub must not throw "Version mismatch"', () => {
+	// A real account-0 xpub (BIP-32 derivation, arbitrary seed), then re-stamped
+	// with each testnet SLIP-132 version -- an authentic base58check-valid
+	// extended key with those exact version bytes, built via a path independent
+	// of derive.ts's own normalize/encode logic.
+	const account = HDKey.fromMasterSeed(hex.decode('1a'.repeat(32))).derive("m/84'/1'/0'");
+	const MAINNET_XPUB_VERSION = 0x0488b21e;
+	const TPUB_VERSION = 0x043587cf; // testnet p2pkh
+	const UPUB_VERSION = 0x044a5262; // testnet p2sh-p2wpkh
+	const VPUB_VERSION = 0x045f1cf6; // testnet p2wpkh
+
+	// Sanity: account.publicExtendedKey is mainnet-prefixed by default (HDKey's
+	// own default versions) -- confirms restampVersion below is doing real work,
+	// not silently testing an already-testnet-prefixed string.
+	it('sanity: the source key is mainnet-prefixed before restamping', () => {
+		expect(account.publicExtendedKey.startsWith('xpub')).toBe(true);
+	});
+
+	it('parses a real tpub (testnet p2pkh) without throwing "Version mismatch"', () => {
+		const tpub = restampVersion(account.publicExtendedKey, TPUB_VERSION);
+		expect(tpub.startsWith('tpub')).toBe(true);
+		const parsed = parseXpub(tpub);
+		expect(parsed.network).toBe('testnet');
+		expect(parsed.inferredScriptType).toBe('p2pkh');
+	});
+
+	it('parses a real upub (testnet p2sh-p2wpkh) without throwing "Version mismatch"', () => {
+		const upub = restampVersion(account.publicExtendedKey, UPUB_VERSION);
+		expect(upub.startsWith('upub')).toBe(true);
+		const parsed = parseXpub(upub);
+		expect(parsed.network).toBe('testnet');
+		expect(parsed.inferredScriptType).toBe('p2sh-p2wpkh');
+	});
+
+	it('parses a real vpub (testnet p2wpkh) without throwing "Version mismatch"', () => {
+		const vpub = restampVersion(account.publicExtendedKey, VPUB_VERSION);
+		expect(vpub.startsWith('vpub')).toBe(true);
+		const parsed = parseXpub(vpub);
+		expect(parsed.network).toBe('testnet');
+		expect(parsed.inferredScriptType).toBe('p2wpkh');
+	});
+
+	it('a testnet vpub derives real bcrt/tb-network addresses end to end (import-shaped)', () => {
+		const vpub = restampVersion(account.publicExtendedKey, VPUB_VERSION);
+		const parsed = parseXpub(vpub);
+		const w = wallet('p2wpkh', parsed.normalizedXpub, 'testnet');
+		const [addr] = deriveAddresses(w, 0, 0, 1);
+		expect(addr.address.startsWith('tb1q')).toBe(true);
+	});
+
+	it('still parses a mainnet-version-restamped key correctly (no regression on the working path)', () => {
+		const restamped = restampVersion(account.publicExtendedKey, MAINNET_XPUB_VERSION);
+		const parsed = parseXpub(restamped);
+		expect(parsed.network).toBe('mainnet');
+		expect(parsed.inferredScriptType).toBe('p2pkh');
+	});
 });
 
 describe('T1: hostile-xpub suite (WALLET-ENGINE §6.1)', () => {
