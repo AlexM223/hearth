@@ -4,6 +4,7 @@
 	// ladder). Coin control lives behind an Advanced toggle. One engine, one
 	// broadcast path -- this screen never knows single vs multisig except as a badge.
 	import { invalidateAll } from '$app/navigation';
+	import { formatSats as fmtSats } from '$lib/format.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -14,9 +15,6 @@
 	// Seeded from the loader, then rotated client-side on demand (Receive tab).
 	// svelte-ignore state_referenced_locally
 	let receiveAddress = $state(data.receiveAddress);
-	function fmtSats(n: number): string {
-		return n.toLocaleString('en-US');
-	}
 
 	async function rotateReceive() {
 		const res = await fetch(`/api/wallets/${data.wallet.id}/receive`, { method: 'POST' });

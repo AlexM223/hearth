@@ -2,6 +2,7 @@
 	// Wallets: the ONE unified engine list + import (DECISIONS.md §4.2). Single-
 	// sig and multisig are one code path -- "kind" is just a badge here.
 	import { goto, invalidateAll } from '$app/navigation';
+	import { formatSats as fmtSats } from '$lib/format.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -11,10 +12,6 @@
 	let payload = $state('');
 	let busy = $state(false);
 	let errorMsg = $state<string | null>(null);
-
-	function fmtSats(sats: number): string {
-		return sats.toLocaleString('en-US');
-	}
 
 	function kindLabel(kind: string, threshold: number, keyCount: number): string {
 		return kind === 'multisig' ? `${threshold}-of-${keyCount} multisig` : 'single-sig';

@@ -8,7 +8,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb, closeDb } from '../db/index.js';
 import { runMigrations } from '../db/migrations.js';
-import { importWallet, syncWallet, getBalance, getUtxos, getSnapshot } from './index.js';
+import { importWallet, syncWallet, getBalance, getUtxos, getSnapshot, getHistory } from './index.js';
 import { deriveAddresses } from './index.js';
 import { GAP_LIMIT, HARD_CAP, type ScanRail } from './scan.js';
 import { scriptToScripthash } from './derive.js';
@@ -147,5 +147,39 @@ describe('T4: gap-limit scan + SWR', () => {
 		const snap = getSnapshot(wallet.id);
 		// GAP_LIMIT addresses per chain (external+internal), give or take a batch.
 		expect(snap!.addressCount).toBeLessThanOrEqual(GAP_LIMIT * 2 + 2);
+	});
+
+	// Regression (M3 live-found bug, hearth-lm1.14): a used address whose coin
+	// has since been fully spent leaves NO UTXO behind. The scan used to build
+	// its detailed-tx set only from `utxos`, so a wallet with used-but-now-empty
+	// addresses (confirmedSats=0, usedCount>0) silently reported txCount=0 and
+	// history=[] -- exactly the dev-DB canonical BIP-84 test zpub's shape.
+	it('populates history for a used address with NO current UTXO (fully spent elsewhere)', async () => {
+		const wallet = importWallet(userId, { name: 'W', xpub: ZPUB });
+		const sh0 = shOf(wallet, 0, 0);
+		const txid = 'cc'.repeat(32);
+		const data = new Map([
+			[
+				sh0,
+				{
+					history: [{ tx_hash: txid, height: 750000 }],
+					confirmed: 0,
+					unconfirmed: 0
+					// no `utxos` entry -- the coin received at this address was spent
+					// elsewhere and nothing currently sits at this scripthash.
+				}
+			]
+		]);
+		await syncWallet({ electrum: new FakeRail(data), tipHeight: 800100 }, wallet.id, { forceRefresh: true });
+
+		const snap = getSnapshot(wallet.id);
+		expect(snap!.usedCount).toBe(1);
+		expect(snap!.confirmedSats).toBe(0);
+		expect(snap!.txCount).toBe(1); // <- was 0 before the fix
+
+		const history = getHistory(wallet.id);
+		expect(history.length).toBe(1);
+		expect(history[0].txid).toBe(txid);
+		expect(history[0].height).toBe(750000); // from get_history, not a UTXO
 	});
 });

@@ -87,6 +87,9 @@ export interface ChainScan {
 	truncated: boolean;
 	confirmedSats: number;
 	unconfirmedSats: number;
+	/** txid -> height, from EVERY address's get_history in this chain (not just
+	 *  addresses with a current UTXO) -- see scanWallet's historyTxids comment. */
+	historyHeights: Map<string, number>;
 }
 export interface ScanResult {
 	addresses: ScannedAddress[];
@@ -108,6 +111,7 @@ async function scanChain(
 	rail: ScanRail
 ): Promise<ChainScan> {
 	const addresses: ScannedAddress[] = [];
+	const historyByIndex = new Map<number, ElectrumHistoryItem[]>();
 	let consecutiveUnused = 0;
 	let index = 0;
 	let lastUsedIndex = -1;
@@ -161,6 +165,7 @@ async function scanChain(
 				txCount: history.length,
 				firstSeenHeight: firstSeenHeight === Number.MAX_SAFE_INTEGER ? null : firstSeenHeight
 			});
+			if (used) historyByIndex.set(d.idx, history);
 			if (used) {
 				consecutiveUnused = 0;
 				lastUsedIndex = d.idx;
@@ -182,13 +187,31 @@ async function scanChain(
 	// Tail trim: keep only addresses within lastUsedIndex + GAP_LIMIT.
 	const keepThrough = lastUsedIndex + GAP_LIMIT;
 	const trimmed = addresses.filter((a) => a.index <= keepThrough);
+
+	// Every used, kept address's FULL history -- not just the ones with a
+	// currently-unspent coin. A used address whose coin was later spent (no
+	// UTXO remains) still belongs in the wallet's transaction history; scanning
+	// only UTXO-linked txids silently drops it (the "history empty despite
+	// used addresses" bug).
+	const historyHeights = new Map<string, number>();
+	for (const a of trimmed) {
+		if (!a.used) continue;
+		for (const h of historyByIndex.get(a.index) ?? []) {
+			const prev = historyHeights.get(h.tx_hash);
+			// height > 0 = confirmed at that height; 0/-1 = unconfirmed. Prefer a
+			// confirmed height over an unconfirmed one if two addresses disagree.
+			if (prev === undefined || (prev <= 0 && h.height > 0)) historyHeights.set(h.tx_hash, h.height);
+		}
+	}
+
 	return {
 		addresses: trimmed,
 		lastUsedIndex,
 		nextCursor: lastUsedIndex + 1,
 		truncated,
 		confirmedSats,
-		unconfirmedSats
+		unconfirmedSats,
+		historyHeights
 	};
 }
 
@@ -237,8 +260,20 @@ export async function scanWallet(
 	// compute spent from our own inputs; fee only when fully resolvable.
 	const ourScripts = new Set(addresses.map((a) => a.scriptPubKey));
 	const allTxids = new Set<string>();
-	// Detail the newest utxo-touching txs (covers received coins + own-input spends).
+	// Detail the utxo-touching txs first (covers received coins + own-input spends)...
 	for (const u of utxos) allTxids.add(u.txid);
+	// ...then EVERY historical txid from every used address, even ones whose
+	// coin has since been fully spent (so history isn't silently empty for a
+	// wallet with used-but-now-empty addresses -- see historyHeights above).
+	for (const txid of external.historyHeights.keys()) allTxids.add(txid);
+	for (const txid of internal.historyHeights.keys()) allTxids.add(txid);
+
+	// Authoritative confirmation height per txid, from address history (used as
+	// a fallback below for txids that no longer have a live UTXO).
+	const historyHeights = new Map<string, number>([
+		...external.historyHeights,
+		...internal.historyHeights
+	]);
 
 	const detailTxids = [...allTxids].slice(0, TX_DETAIL_CAP);
 	const detailed = await Promise.all(
@@ -275,7 +310,7 @@ export async function scanWallet(
 		}
 		transactions.push({
 			txid,
-			height: heightForTx(txid, utxos),
+			height: heightForTx(txid, utxos, historyHeights),
 			blockTime: tx.blocktime ?? tx.time ?? null,
 			deltaSats: received - spent,
 			// Fee is knowable only when every input value is ours (rare); never guessed.
@@ -295,9 +330,14 @@ export async function scanWallet(
 	};
 }
 
-function heightForTx(txid: string, utxos: ScannedUtxo[]): number {
+/** A live UTXO's height is authoritative; otherwise fall back to the height
+ *  reported by the owning address's get_history (a spent tx is still
+ *  confirmed at the height it was mined, even with no UTXO left to read it
+ *  from). Only defaults to 0 (unconfirmed) when neither source knows it. */
+function heightForTx(txid: string, utxos: ScannedUtxo[], historyHeights: Map<string, number>): number {
 	const u = utxos.find((x) => x.txid === txid);
-	return u ? u.height : 0;
+	if (u) return u.height;
+	return historyHeights.get(txid) ?? 0;
 }
 
 function computeFee(tx: VerboseTx, ownedOutputs: Map<string, number>): number | null {
