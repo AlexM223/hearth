@@ -1,0 +1,44 @@
+manifestVersion: 1
+id: hearth
+category: bitcoin
+name: Hearth
+version: "0.0.1"
+tagline: Come navigate Bitcoin with me
+description: >-
+  Hearth is the always-watching Bitcoin wallet for the people you trust: you
+  run the node, and you invite family and friends to come navigate Bitcoin
+  with you. One verified chain, one mempool, one shared view; every member
+  keeps their own keys; the watchtower tells each of them the moment their
+  money moves.
+
+
+  This is an early M0 scaffold release: the themed shell, health check and
+  Umbrel packaging are in place, but wallets, the come-aboard invite flow,
+  the explorer and mining are not yet built. Nothing is published to the
+  Umbrel App Store until those milestones land (DECISIONS.md M1-M7) and the
+  pre-publish name/trademark sweep (M7) is done.
+
+
+  Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
+releaseNotes: >-
+  Initial scaffold: SvelteKit 2 / Svelte 5 / TypeScript on adapter-node, the
+  Ingle design system (dark default, warm-parchment light), the module-bounded
+  server tree, node:sqlite with WAL + migrations, and the Umbrel app_proxy
+  packaging with the CSRF/origin header trio. No wallet, auth, explorer or
+  mining functionality yet -- see DECISIONS.md for the full build order.
+developer: Alex Martinez
+website: https://github.com/AlexM223/hearth
+dependencies:
+  - bitcoin
+repo: https://github.com/AlexM223/hearth
+support: https://github.com/AlexM223/hearth/issues
+port: 3252
+gallery: []
+path: ""
+defaultUsername: "admin@hearth.local"
+deterministicPassword: true
+backupIgnore:
+  - data/logs
+  - data/tls
+submitter: Alex Martinez
+submission: https://github.com/getumbrel/umbrel-apps/pull/0000

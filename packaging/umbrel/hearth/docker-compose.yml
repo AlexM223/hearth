@@ -1,0 +1,61 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: hearth_web_1
+      APP_PORT: 3000
+
+  web:
+    # M0 skeleton: no image has been pushed to GHCR yet (that's an M7 store-
+    # readiness deliverable, DECISIONS.md §5.5). Replace with the real
+    # multi-arch digest before this compose file is ever deployed --
+    # `docker buildx imagetools inspect ghcr.io/alexm223/hearth:<version>`.
+    image: ghcr.io/alexm223/hearth:0.0.1@sha256:0000000000000000000000000000000000000000000000000000000000000
+    restart: on-failure
+    stop_grace_period: 1m
+    init: true
+    user: "1000:1000"
+    ports:
+      # Raw host port for hardware-wallet signing -- needs an HTTPS secure
+      # context that app_proxy's plain HTTP cannot provide. host 4489 ->
+      # container 3443 (Heartwood/cairn already uses 4488 -- kept distinct so
+      # both can coexist on the same box during the Hearth migration).
+      - "4489:3443"
+      # Raw host ports for the solo-mining Stratum V1 listeners (DECISIONS.md
+      # §4.6, built in M5) -- app_proxy is HTTP-only and can't proxy raw TCP.
+      # Only reachable once mining is enabled AND bind is set to lan/all;
+      # harmless (nothing listening) until then.
+      - "3333:3333" # standard
+      - "3334:3334" # ASIC-floor
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      # HTTP port app_proxy connects to.
+      PORT: 3000
+      # Gates the Umbrel auto-connect probe (M1) -- without this the probe
+      # never fires and the app stays on manual-config-only. Never set on
+      # non-Umbrel deployments.
+      HEARTH_PLATFORM: umbrel
+      # First-run admin bootstrap; forces a credential reset on first login (M1).
+      HEARTH_ADMIN_PASSWORD: ${APP_PASSWORD}
+      # Keeps the session cookie non-Secure over plain-HTTP Umbrel and anchors
+      # notification deep links. Port MUST match the manifest `port`.
+      HEARTH_ORIGIN: http://${DEVICE_DOMAIN_NAME}:3252
+      # Advertised HTTPS port, since the published host port (4489) differs from 3443.
+      HEARTH_HTTPS_EXTERNAL_PORT: 4489
+      # Better client IPs for rate-limiting/audit behind the proxy; safely ignored if absent.
+      ADDRESS_HEADER: x-forwarded-for
+      # --- auto-wired Core RPC, never a hand-typed connection string (DECISIONS.md §5.3) ---
+      # `dependencies: [bitcoin]` in umbrel-app.yml makes umbrelOS inject these
+      # from the Bitcoin app's own exports; the fixed 10.21.21.8:8332 service
+      # address is config/index.ts's fallback if these ever come through unset.
+      HEARTH_CORE_RPC_HOST: ${APP_BITCOIN_NODE_IP}
+      HEARTH_CORE_RPC_PORT: ${APP_BITCOIN_RPC_PORT}
+      HEARTH_CORE_RPC_USER: ${APP_BITCOIN_RPC_USER}
+      HEARTH_CORE_RPC_PASS: ${APP_BITCOIN_RPC_PASS}
+      # --- the CSRF/origin fix, REQUIRED behind app_proxy (DECISIONS.md §5.2) ---
+      # Without these, adapter-node assumes https and SvelteKit's CSRF origin
+      # check rejects every form POST; app_proxy sets both by default.
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
