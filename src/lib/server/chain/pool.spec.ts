@@ -1,10 +1,14 @@
 /**
- * Pool attribution seam test (EXPLORER.md §2, §6). Run against a migrated
- * (through 006, no `mining_blocks` yet) test DB for the real pre-M5 state --
- * `getBlockPoolAttribution`/`listPoolFoundBlockHashes` must return
- * null/empty WITHOUT throwing. A second variant creates the table ad-hoc
- * (simulating post-M5) with a fixture row and asserts the correct
- * `finderDisplayName`/`isYou` for both viewer cases.
+ * Pool attribution seam test (EXPLORER.md §2, §6). M5 has now landed the real
+ * `mining_blocks` table (migration 007) -- this file no longer needs the
+ * ad-hoc CREATE TABLE this test used to simulate "post-M5" with; every
+ * migrated test DB has the real table from here on. The "no fixture rows"
+ * describe block below still exercises the genuinely-useful empty-table case
+ * (a fresh instance with no blocks found yet) -- `getBlockPoolAttribution`/
+ * `listPoolFoundBlockHashes` must return null/empty WITHOUT throwing. The
+ * populated-table block inserts fixture rows against the REAL migrated schema
+ * (payout_address/coinbase_value_sats/submit_result are NOT NULL there) and
+ * asserts the correct `finderDisplayName`/`isYou` for both viewer cases.
  */
 import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -18,7 +22,7 @@ beforeEach(() => {
 	runMigrations(db);
 });
 
-describe('chain/pool: pre-M5 (no mining_blocks table)', () => {
+describe('chain/pool: no blocks found yet (fresh instance, empty mining_blocks)', () => {
 	it('getBlockPoolAttribution returns null without throwing', () => {
 		expect(() => getBlockPoolAttribution('deadbeef', null)).not.toThrow();
 		expect(getBlockPoolAttribution('deadbeef', 1)).toBeNull();
@@ -30,19 +34,9 @@ describe('chain/pool: pre-M5 (no mining_blocks table)', () => {
 	});
 });
 
-describe('chain/pool: post-M5 (mining_blocks table present, ad-hoc fixture)', () => {
+describe('chain/pool: mining_blocks populated (real migrated schema, fixture rows)', () => {
 	function setUp(): { finderId: number; otherId: number } {
 		const db = getDb();
-		db.exec(`
-			CREATE TABLE mining_blocks (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				height INTEGER NOT NULL,
-				block_hash TEXT NOT NULL UNIQUE,
-				user_id INTEGER NOT NULL REFERENCES users(id),
-				submit_result TEXT NOT NULL,
-				found_at TEXT NOT NULL
-			);
-		`);
 		db.prepare('INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)').run(
 			'alex',
 			'h',
@@ -61,8 +55,10 @@ describe('chain/pool: post-M5 (mining_blocks table present, ad-hoc fixture)', ()
 			(db.prepare('SELECT id FROM users WHERE username = ?').get('bailey') as { id: number }).id
 		);
 		db.prepare(
-			'INSERT INTO mining_blocks (height, block_hash, user_id, submit_result, found_at) VALUES (?, ?, ?, ?, ?)'
-		).run(934200, 'cafebabe', finderId, 'accepted', '2026-07-21T00:00:00.000Z');
+			`INSERT INTO mining_blocks
+			   (height, block_hash, user_id, payout_address, coinbase_value_sats, submit_result, found_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`
+		).run(934200, 'cafebabe', finderId, 'bcrt1qfixture', 5000000000, 'accepted', '2026-07-21T00:00:00.000Z');
 		return { finderId, otherId };
 	}
 
@@ -93,9 +89,11 @@ describe('chain/pool: post-M5 (mining_blocks table present, ad-hoc fixture)', ()
 		const { finderId } = setUp();
 		getDb()
 			.prepare(
-				'INSERT INTO mining_blocks (height, block_hash, user_id, submit_result, found_at) VALUES (?, ?, ?, ?, ?)'
+				`INSERT INTO mining_blocks
+				   (height, block_hash, user_id, payout_address, coinbase_value_sats, submit_result, found_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?)`
 			)
-			.run(934201, 'stale', finderId, 'stale', '2026-07-21T00:00:01.000Z');
+			.run(934201, 'stale', finderId, 'bcrt1qfixture', 5000000000, 'rejected:stale', '2026-07-21T00:00:01.000Z');
 		expect(getBlockPoolAttribution('stale', finderId)).toBeNull();
 		expect(listPoolFoundBlockHashes().has('stale')).toBe(false);
 	});
