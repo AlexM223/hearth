@@ -127,8 +127,17 @@
 	   candlelight amber, not the banned Bitcoin-orange band), just darker:
 	   #996427 computes to ~4.74:1. */
 	--accent: #996427;
-	--accent-hover: #c48540;
-	--accent-pressed: #9c6524;
+	/* hearth-2zt: hover/pressed were left at their pre-hearth-de0 lightness,
+	   so hover (#c48540, lighter than rest) collapsed to ~2.94:1 against
+	   --on-accent once rest got darkened for AA, and pressed (#9c6524) sat
+	   almost byte-identical to rest -- barely distinguishable. Since rest is
+	   already near the AA floor, a *lighter* hover can't clear 4.5:1 in this
+	   palette; instead both interactive states step darker than rest, same
+	   H32/S~60 hue family: hover #935f25 (~5.10:1), pressed #7a501f
+	   (~6.65:1) -- a visible rest -> hover -> pressed darkening ladder that
+	   stays clear of the banned Bitcoin-orange band. */
+	--accent-hover: #935f25;
+	--accent-pressed: #7a501f;
 	--accent-dim: #d2ab7c;
 	--on-accent: #fff8ef;
 
@@ -165,8 +174,8 @@
 		--text-faint: #a9ada2;
 
 		--accent: #996427;
-		--accent-hover: #c48540;
-		--accent-pressed: #9c6524;
+		--accent-hover: #935f25; /* kept in sync with the [data-theme='light'] block above (hearth-2zt) */
+		--accent-pressed: #7a501f; /* kept in sync with the [data-theme='light'] block above (hearth-2zt) */
 		--accent-dim: #d2ab7c;
 		--on-accent: #fff8ef;
 

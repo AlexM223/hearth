@@ -7,6 +7,13 @@
  * this was a shortfall against the file's own stated intent, not just a
  * generic a11y nice-to-have.
  *
+ * Also covers hearth-2zt, the follow-up hearth-de0 explicitly spawned:
+ * `--accent-hover` was left at its pre-fix lightness and collapsed to
+ * ~2.94:1 once rest got darkened (hover used to be lighter than rest;
+ * lighter doesn't clear AA once rest is already near the floor), and
+ * `--accent-pressed` sat almost byte-identical to rest. Both now step
+ * darker than rest in the same H32 hue family.
+ *
  * This computes REAL WCAG relative-luminance contrast from the actual
  * token values in app.css (not a source-string guess), so it fails again if
  * the token ever regresses back toward the old value.
@@ -66,5 +73,61 @@ describe('light-theme primary button meets WCAG AA text contrast (hearth-de0)', 
 		const onAccentValues = tokenValues('--on-accent');
 		expect(accentValues[0]).toBe('#e6ad6b');
 		expect(contrastRatio(accentValues[0]!, onAccentValues[0]!)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+	});
+});
+
+describe('light-theme hover/pressed accent states meet WCAG AA text contrast (hearth-2zt)', () => {
+	it('--accent-hover is no longer the old #c48540 value that computed to ~2.94:1', () => {
+		const hoverValues = tokenValues('--accent-hover');
+		// [dark, light-data-theme, system-light] in source order.
+		expect(hoverValues[1]).not.toBe('#c48540');
+		expect(hoverValues[2]).not.toBe('#c48540');
+	});
+
+	it('--accent-hover vs --on-accent clears 4.5:1 in both light-theme declarations', () => {
+		const hoverValues = tokenValues('--accent-hover');
+		const onAccentValues = tokenValues('--on-accent');
+		for (const i of [1, 2]) {
+			const ratio = contrastRatio(hoverValues[i]!, onAccentValues[i]!);
+			expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+		}
+	});
+
+	it('--accent-pressed vs --on-accent clears 4.5:1 in both light-theme declarations', () => {
+		const pressedValues = tokenValues('--accent-pressed');
+		const onAccentValues = tokenValues('--on-accent');
+		for (const i of [1, 2]) {
+			const ratio = contrastRatio(pressedValues[i]!, onAccentValues[i]!);
+			expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+		}
+	});
+
+	it('hover and pressed both read as visibly darker than resting --accent, not near-duplicates', () => {
+		const accentValues = tokenValues('--accent');
+		const hoverValues = tokenValues('--accent-hover');
+		const pressedValues = tokenValues('--accent-pressed');
+		for (const i of [1, 2]) {
+			const restLum = relLuminance(accentValues[i]!);
+			const hoverLum = relLuminance(hoverValues[i]!);
+			const pressedLum = relLuminance(pressedValues[i]!);
+			// Darker means lower relative luminance, and each step should be a
+			// perceptible jump, not a rounding-error's worth of difference.
+			expect(hoverLum).toBeLessThan(restLum - 0.01);
+			expect(pressedLum).toBeLessThan(hoverLum - 0.01);
+		}
+	});
+
+	it('the [data-theme="light"] block and the system-light @media block agree on hover/pressed', () => {
+		const hoverValues = tokenValues('--accent-hover');
+		const pressedValues = tokenValues('--accent-pressed');
+		expect(hoverValues[1]).toBe(hoverValues[2]);
+		expect(pressedValues[1]).toBe(pressedValues[2]);
+	});
+
+	it('dark theme hover/pressed are untouched', () => {
+		const hoverValues = tokenValues('--accent-hover');
+		const pressedValues = tokenValues('--accent-pressed');
+		expect(hoverValues[0]).toBe('#eeb878');
+		expect(pressedValues[0]).toBe('#d79c5b');
 	});
 });
