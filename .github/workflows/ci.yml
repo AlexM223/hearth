@@ -1,12 +1,8 @@
 name: CI
 
-# DECISIONS.md §6 promises every milestone "typecheck + Vitest green ... CI
-# (typecheck + Vitest + no-native-deps guard + buildx amd64/arm64 +
-# prod-boot smoke)" starting at M0. No .github/workflows existed anywhere in
-# the repo before M7 -- this file closes that gap (found while preparing the
-# real release.yml) so PRs and pushes to main actually get the CI the
-# constitution already claims exists. Build-only, no registry push (see
-# release.yml for the real publish-on-tag workflow).
+# Typecheck + Vitest + no-native-deps guard + buildx amd64/arm64 +
+# prod-boot smoke on every PR and push to main. Build-only, no registry
+# push (see release.yml for the publish-on-tag workflow).
 
 on:
   push:

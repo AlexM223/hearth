@@ -29,7 +29,19 @@ vite.config.ts.timestamp-*
 *.db-wal
 *.log
 
-# M7 scratch: local-only clones/working copies (umbrel-apps checkout for
-# lint, etc.) -- never committed, read-only reference material
+# Local scratch: clones/working copies (umbrel-apps checkout for lint,
+# etc.) -- never committed, read-only reference material
 /.scratch/
+
+# Internal working artifacts -- never committed to the public repo
+/.beads/
+/.claude/
+/CLAUDE.md
+/DECISIONS.md
+/docs/
+/packaging/umbrel/hearth/GALLERY.md
+/packaging/umbrel/hearth/LINT-RESULTS.md
+/packaging/umbrel/hearth/RELEASE-CHECKLIST.md
+/packaging/umbrel/hearth/UPDATE-PATH.md
+/scripts/qa-m1.mjs
 

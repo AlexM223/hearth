@@ -1,8 +1,9 @@
 # Hearth
 
-The always-watching Bitcoin wallet for the people you trust. Read
-[`DECISIONS.md`](./DECISIONS.md) first -- it is the project constitution and
-governs every architectural, naming and design choice here.
+The always-watching Bitcoin wallet for the people you trust. A self-hosted
+household wallet, block explorer, solo-mining dashboard, and watchtower in a
+single container — built for [Umbrel](https://umbrel.com/), runs anywhere
+Docker does.
 
 ## Developing
 
@@ -31,9 +32,3 @@ on Umbrel. Run it with `node server.mjs` after `npm run build`.
 npm run test    # vitest, single run
 npm run check   # svelte-check
 ```
-
-## Issue tracking
-
-This repo uses [`br`](https://github.com/beads-tools/beads) (beads) for issue
-tracking under `.beads/`. `br ready --json` shows actionable work; see
-`DECISIONS.md` §6 for the M0-M8 build order these issues follow.

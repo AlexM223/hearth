@@ -1,12 +1,9 @@
 name: Release image
 
-# Real multi-arch build + push to GHCR, on a version tag push (v0.1.0, v0.1.1,
-# ...). This workflow performs an actual publish -- it only runs when Alex
-# pushes a tag to a real GitHub repo. Writing this file is packaging prep
-# (M7, DECISIONS.md §5.1/§5.5); it does not publish anything by existing --
-# no tag has been pushed, no GitHub repo exists yet for this to run against.
+# Multi-arch build + push to GHCR, on a version tag push (v0.1.0, v0.1.1,
+# ...).
 #
-# After a real run, verify both platforms landed in the manifest list with:
+# After a run, verify both platforms landed in the manifest list with:
 #   docker buildx imagetools inspect ghcr.io/alexm223/hearth:<version>
 # and update packaging/umbrel/hearth/docker-compose.yml's image digest
 # (currently `<to-fill-after-push>`) with the real one reported there.
@@ -42,10 +39,10 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       # Belt-and-suspenders: the Dockerfile's own build stage already fails
-      # on any native .node addon in the pruned production tree
-      # (DECISIONS.md §5.1's no-native-deps guard), but re-run the same
-      # check against the checked-out source here too so a CI-only bypass
-      # of the Docker build can never slip a native addon through.
+      # on any native .node addon in the pruned production tree (the
+      # no-native-deps guard), but re-run the same check against the
+      # checked-out source here too so a CI-only bypass of the Docker
+      # build can never slip a native addon through.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -92,9 +89,8 @@ jobs:
       # arm64 is build-verified by buildx's own per-platform build step
       # above but not booted here -- ubuntu-latest runners are amd64-only
       # and a QEMU-emulated boot smoke test in CI is slow/flaky enough that
-      # it is intentionally left to the manual pre-submission checklist
-      # (packaging/umbrel/hearth/RELEASE-CHECKLIST.md) rather than gating
-      # every tag push on it.
+      # it is intentionally left to manual pre-submission testing rather
+      # than gating every tag push on it.
       - name: Pull pushed image and run the boot smoke test
         run: |
           docker pull "${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.version }}"

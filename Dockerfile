@@ -2,9 +2,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-# --ignore-scripts, not a node-gyp toolchain: the M2.5 signing surface made
+# --ignore-scripts, not a node-gyp toolchain: the signing surface makes
 # @trezor/connect-web a devDependency, which pulls the native `usb` addon
-# transitively (the cairn lesson, DECISIONS.md §2). It is browser-side only
+# transitively. It is browser-side only
 # -- Vite bundles it into the client; the server never imports it and
 # `npm prune --omit=dev` below drops it from the runtime tree -- but a plain
 # `npm ci` still runs its node-gyp install script, which fails on Alpine
@@ -21,9 +21,9 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # CI fails the build outright on any native `.node` file surviving into the
-# pruned production tree (the no-native-deps guard, DECISIONS.md §5.1) --
-# Smart App Control on Alex's Windows dev box blocks unsigned native addons,
-# and the same posture is enforced here so dev and prod never diverge.
+# pruned production tree (the no-native-deps guard): the server runs pure
+# JS everywhere, and the same posture is enforced here so dev and prod
+# never diverge.
 RUN sh -c 'if find node_modules -iname "*.node" | grep -q .; then \
     echo "ERROR: native .node addon(s) found in production dependency tree:"; \
     find node_modules -iname "*.node"; \
@@ -52,10 +52,10 @@ COPY --from=build /app/scripts/tls-cert.mjs ./scripts/tls-cert.mjs
 COPY --from=build /app/scripts/serverProto.mjs ./scripts/serverProto.mjs
 
 # SQLite database + logs + first-boot TLS cert live on the /data volume --
-# mount it or lose it (DECISIONS.md §5.1, §5.4).
+# mount it or lose it.
 #
 # HEARTH_DATA_DIR is REQUIRED here, not just HEARTH_DB/HEARTH_LOG_FILE: this
-# was a real container-crashing bug found by M7's boot smoke test.
+# was a real container-crashing bug found by the boot smoke test.
 # config/index.ts's `dataDir` (used directly by hooks.server.ts's
 # initSecretKey(config.dataDir) for the notify-secrets encryption key) falls
 # back to a relative './data' whenever neither HEARTH_DATA_DIR nor
@@ -75,7 +75,7 @@ ENV PORT=3000
 # Self-signed HTTPS listener; the cert is generated at first boot into
 # /data/tls. Publish the port to enable it; an unpublished port is harmless.
 ENV HEARTH_HTTPS_PORT=3443
-# SIGNING.md §3.3: the signing surface's /sign route accepts an externally-
+# The signing surface's /sign route accepts an externally-
 # signed PSBT upload (WebHID / air-gap file / BBQr reassembly). A real PSBT,
 # even a large multisig with many inputs each carrying a full
 # nonWitnessUtxo, is a few KB; 512K is generous headroom while still
