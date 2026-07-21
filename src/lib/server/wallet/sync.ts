@@ -13,7 +13,8 @@ import {
 	getWalletRowUnscoped,
 	persistScan,
 	readSnapshotRow,
-	markSnapshotDirty
+	markSnapshotDirty,
+	sweepExpiredDrafts
 } from './repo.js';
 
 /** Node surface sync needs: the Electrum scan rail + best-known tip height. */
@@ -47,6 +48,8 @@ export function syncWallet(
 	const run = (async () => {
 		const wallet = getWalletRowUnscoped(walletId);
 		if (!wallet) return;
+		// Lazy expiry sweep on the sync lane (never a naked SSE-path timer, §1).
+		sweepExpiredDrafts(walletId);
 		const result = await scanWallet(wallet, node.electrum, node.tipHeight ?? null);
 		persistResult(wallet, result);
 	})().finally(() => {

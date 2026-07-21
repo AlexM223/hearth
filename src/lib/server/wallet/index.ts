@@ -106,3 +106,10 @@ export {
 	MAX_FEE_RATE
 } from './select.js';
 export { decodeAddress, isValidAddress, type OutputKind } from './address.js';
+export {
+	reservedOutpoints,
+	reservationWarnings,
+	abandonDraft,
+	sweepExpired,
+	type ReservationWarning
+} from './reserve.js';

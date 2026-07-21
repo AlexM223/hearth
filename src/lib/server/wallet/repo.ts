@@ -523,3 +523,103 @@ export function walletKeyIds(walletId: number): number[] {
 		.all(walletId) as unknown as { id: number }[];
 	return rows.map((r) => r.id);
 }
+
+/** Owner-scoped status change (abandon). Returns true if a live draft moved.
+ *  Frees its reserved inputs since reservedOutpoints only counts draft/signing. */
+export function setDraftStatusOwned(
+	userId: number,
+	walletId: number,
+	draftId: number,
+	status: DraftStatus,
+	fromStatuses: DraftStatus[]
+): boolean {
+	const placeholders = fromStatuses.map(() => '?').join(',');
+	const res = getDb()
+		.prepare(
+			`UPDATE psbt_drafts SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+			 WHERE id = ? AND wallet_id = ? AND status IN (${placeholders})
+			 AND wallet_id IN (SELECT id FROM wallets WHERE user_id = ?)`
+		)
+		.run(status, draftId, walletId, ...fromStatuses, userId);
+	return Number(res.changes) > 0;
+}
+
+/** Lazy expiry sweep (§1 expiry): move draft/signing rows past expires_at to
+ *  abandoned, freeing their inputs. Called from the sync lane, never a naked
+ *  timer that reads SQLite off the SSE path. Returns the count swept. */
+export function sweepExpiredDrafts(walletId?: number): number {
+	const now = new Date().toISOString();
+	const sql = walletId
+		? `UPDATE psbt_drafts SET status = 'abandoned', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+		   WHERE wallet_id = ? AND status IN ('draft','signing') AND expires_at < ?`
+		: `UPDATE psbt_drafts SET status = 'abandoned', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+		   WHERE status IN ('draft','signing') AND expires_at < ?`;
+	const res = walletId
+		? getDb().prepare(sql).run(walletId, now)
+		: getDb().prepare(sql).run(now);
+	return Number(res.changes);
+}
+
+/** Atomic broadcast claim (§5.4). Exactly one concurrent caller sees changes>0.
+ *  A crashed claim self-expires after `staleMs`. */
+export function claimBroadcast(walletId: number, draftId: number, staleMs = 60_000): boolean {
+	const now = new Date().toISOString();
+	const staleBefore = new Date(Date.now() - staleMs).toISOString();
+	const res = getDb()
+		.prepare(
+			`UPDATE psbt_drafts
+			 SET broadcast_started_at = ?, updated_at = ?
+			 WHERE id = ? AND wallet_id = ? AND txid IS NULL AND status != 'broadcast'
+			   AND (broadcast_started_at IS NULL OR broadcast_started_at < ?)`
+		)
+		.run(now, now, draftId, walletId, staleBefore);
+	return Number(res.changes) === 1;
+}
+
+/** Release a broadcast claim (an unrecoverable rejection -- stays retryable). */
+export function releaseBroadcastClaim(walletId: number, draftId: number): void {
+	getDb()
+		.prepare('UPDATE psbt_drafts SET broadcast_started_at = NULL WHERE id = ? AND wallet_id = ?')
+		.run(draftId, walletId);
+}
+
+/** Record a successful broadcast: status, txid, authoritative PSBT. */
+export function markBroadcast(walletId: number, draftId: number, txid: string, psbt: string): void {
+	getDb()
+		.prepare(
+			`UPDATE psbt_drafts SET status = 'broadcast', txid = ?, psbt = ?,
+			   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+			 WHERE id = ? AND wallet_id = ?`
+		)
+		.run(txid, psbt, draftId, walletId);
+}
+
+/** Mark a draft superseded (duplicate txid or RBF-replaced). */
+export function markSuperseded(walletId: number, draftId: number): void {
+	getDb()
+		.prepare(
+			`UPDATE psbt_drafts SET status = 'superseded', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+			 WHERE id = ? AND wallet_id = ?`
+		)
+		.run(draftId, walletId);
+}
+
+/** Any broadcast/confirmed draft of this wallet already carrying `txid`? (dedup) */
+export function findBroadcastByTxid(walletId: number, txid: string): number | null {
+	const row = getDb()
+		.prepare(
+			"SELECT id FROM psbt_drafts WHERE wallet_id = ? AND txid = ? AND status IN ('broadcast','confirmed')"
+		)
+		.get(walletId, txid) as { id: number } | undefined;
+	return row ? row.id : null;
+}
+
+/** Find the live draft that replaces `replacedTxid` (RBF supersede target). */
+export function findDraftByReplacesTxid(walletId: number, replacedTxid: string): number | null {
+	const row = getDb()
+		.prepare(
+			"SELECT id FROM psbt_drafts WHERE wallet_id = ? AND txid = ? AND status IN ('broadcast','confirmed','signing','draft')"
+		)
+		.get(walletId, replacedTxid) as { id: number } | undefined;
+	return row ? row.id : null;
+}
