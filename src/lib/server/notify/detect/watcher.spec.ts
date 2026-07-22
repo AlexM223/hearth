@@ -12,6 +12,7 @@ import { importWallet, syncWallet, deriveAddresses } from '../../wallet/index.js
 import type { Wallet } from '../../wallet/index.js';
 import {
 	createWatcherState,
+	enumerateAndSubscribe,
 	handleScripthashChange,
 	type Watched,
 	type WatcherElectrumRail,
@@ -400,5 +401,44 @@ describe('T1: wallet-vanished mid-flight (TOCTOU, cairn-mo36)', () => {
 		// unsubscribe is fire-and-forget -- allow a tick for it to run.
 		await new Promise((r) => setTimeout(r, 0));
 		expect(unsubscribed).toBe(true);
+	});
+});
+
+describe('enumerateAndSubscribe: proactive baseline (regtest-found first-payment swallow)', () => {
+	// subscribeScripthash never emits the initial status, so before this fix
+	// the FIRST status-change per scripthash was consumed by the baseline
+	// gate -- i.e. the first payment after subscription (e.g. right after a
+	// wallet import) was silently swallowed, forever. Found live: a confirmed
+	// regtest receive left the events table empty.
+	it('baselines each subscribed scripthash, so the first change AFTER subscribe notifies', async () => {
+		const state = createWatcherState();
+		state.baselineComplete = true;
+		state.floor.acceptHeader(V.height, V.headerHex); // warm the SPV floor like the live header stream does
+		const preexisting = 'ab'.repeat(32);
+		const rail = fakeRail({
+			async getHistory() {
+				return [{ tx_hash: preexisting, height: 123 }];
+			}
+		});
+		await enumerateAndSubscribe(state, rail);
+		expect(state.byScripthash.has(sh0)).toBe(true);
+		expect(state.baselinedScripthashes.has(sh0)).toBe(true);
+
+		// A NEW tx appears (the "payment a minute after import"): it must fire
+		// exactly once; the pre-existing baselined txid must stay silent.
+		const events: ReceivedEvent[] = [];
+		const railWithNew = fakeRail({
+			async getHistory() {
+				return [
+					{ tx_hash: preexisting, height: 123 },
+					{ tx_hash: V.txid, height: V.height }
+				];
+			}
+		});
+		await handleScripthashChange(state, railWithNew, sh0, {
+			onReceived: (_db, event) => events.push(event)
+		});
+		expect(events).toHaveLength(1);
+		expect(events[0].txid).toBe(V.txid);
 	});
 });

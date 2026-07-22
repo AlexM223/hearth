@@ -346,11 +346,22 @@ export async function enumerateAndSubscribe(state: WatcherState, rail: WatcherEl
 	for (const wallet of wallets) {
 		try {
 			const scripthashes = refreshWatches(state, wallet);
-			for (const sh of scripthashes.keys()) {
+			for (const [sh, w] of scripthashes) {
 				try {
 					await rail.subscribeScripthash(sh);
 				} catch (e) {
 					logWarn('watchtower', { event: 'subscribe_failed', scripthash: sh, err: String(e) });
+					continue;
+				}
+				// Proactive baseline (found live on regtest): subscribeScripthash
+				// does NOT emit the initial status, so without this the FIRST
+				// status-change event per scripthash is consumed by the baseline
+				// gate -- i.e. the first payment after subscription was silently
+				// swallowed, forever. Baselining here (with the pre-payment
+				// history) means the very next change notifies correctly. A
+				// failed baseline logs and retries via the next event/refresh.
+				if (state.byScripthash.get(sh) === w && !state.baselinedScripthashes.has(sh)) {
+					await baselineScripthash(rail, state, sh, w);
 				}
 			}
 		} catch (e) {
@@ -383,6 +394,11 @@ const STARTUP_DELAY_MS = 10_000;
 
 export interface Watchtower {
 	state: WatcherState;
+	/** Immediate re-enumeration -- call after a wallet import so the new
+	 *  wallet is watched (and baselined) NOW, not up to REFRESH_INTERVAL_MS
+	 *  later. During that lag a payment to a fresh wallet was invisible, and
+	 *  the eventual baseline swallowed it permanently (found live on regtest). */
+	refreshNow(): Promise<void>;
 	stop(): void;
 }
 
@@ -405,6 +421,28 @@ export function startWatchtower(node: NodeClient, hooks: WatchtowerHooks = {}): 
 	};
 	node.electrum.on('scripthash', onScripthash);
 
+	// Warm the SPV difficulty floor from the LIVE header stream (WATCHTOWER.md
+	// §1.3: "the live stream IS the moving anchor"). Found live on regtest:
+	// nothing in production ever called acceptHeader, so the floor stayed
+	// permanently cold and spvVerifyConfirmed's cold-cache guard deferred
+	// EVERY receive notification forever -- the watchtower never fired once
+	// outside tests (which all warmed the floor by hand).
+	const onHeaderWarm = (header: { height: number; hex: string }): void => {
+		if (stopped) return;
+		if (typeof header?.height === 'number' && typeof header?.hex === 'string') {
+			state.floor.acceptHeader(header.height, header.hex);
+		}
+	};
+	node.electrum.on('header', onHeaderWarm);
+	// ...and once immediately: the next natural header can be ~10 minutes out
+	// on mainnet, and until then every detection would still defer cold.
+	node.electrum
+		.headersSubscribe()
+		.then((tip) => onHeaderWarm(tip))
+		.catch((e: unknown) => {
+			logWarn('watchtower', { event: 'initial_floor_warmup_failed', err: String(e) });
+		});
+
 	const startupTimer = setTimeout(() => {
 		if (stopped) return;
 		enumerateAndSubscribe(state, rail)
@@ -426,11 +464,20 @@ export function startWatchtower(node: NodeClient, hooks: WatchtowerHooks = {}): 
 
 	return {
 		state,
+		async refreshNow() {
+			if (stopped) return;
+			try {
+				await enumerateAndSubscribe(state, rail);
+			} catch (e) {
+				logWarn('watchtower', { event: 'nudge_enumeration_failed', err: String(e) });
+			}
+		},
 		stop() {
 			stopped = true;
 			clearTimeout(startupTimer);
 			if (refreshTimer) clearInterval(refreshTimer);
 			node.electrum.off('scripthash', onScripthash);
+			node.electrum.off('header', onHeaderWarm);
 		}
 	};
 }

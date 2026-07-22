@@ -7,6 +7,7 @@ import { json, error, type RequestEvent } from '@sveltejs/kit';
 import { importWallet, listWallets, getSnapshot, type ImportInput } from '$lib/server/wallet/index.js';
 import { httpStatusFor } from '$lib/server/wallet/errors.js';
 import { requireRole } from '$lib/server/auth/index.js';
+import { nudgeWatchtowerRefresh } from '$lib/server/notify/index.js';
 
 /** Layer 2 (COME-ABOARD.md §3.3, defense in depth): a Guest holds no wallet
  *  (matrix §3.2 -- ✗). Layer 1 (hooks.server.ts's API_POLICY) already
@@ -47,6 +48,10 @@ export async function POST(event: RequestEvent) {
 	}
 	try {
 		const wallet = importWallet(user.id, body);
+		// Watch the new wallet NOW -- the periodic enumeration is up to 5
+		// minutes out, and a payment landing before it would be silently
+		// baselined away (WATCHTOWER §1.1's gate, found live on regtest).
+		nudgeWatchtowerRefresh();
 		return json({ id: wallet.id, name: wallet.name, kind: wallet.kind, scriptType: wallet.scriptType }, { status: 201 });
 	} catch (e) {
 		const { status, message } = httpStatusFor(e);

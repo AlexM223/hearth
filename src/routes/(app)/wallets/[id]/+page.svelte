@@ -230,8 +230,8 @@
 							<span class="txid t-label">{tx.txid.slice(0, 12)}…</span>
 							<span class="conf t-label">
 								{#if tx.height > 0}
-									block {fmtSats(tx.height)}{#if data.tipHeight !== null && approxAgeFromDepth(data.tipHeight - tx.height)}
-										· {approxAgeFromDepth(data.tipHeight - tx.height)}{/if}
+									{@const age = data.tipHeight !== null ? approxAgeFromDepth(data.tipHeight - tx.height) : ''}
+									block {fmtSats(tx.height)}{age ? ` · ${age}` : ''}
 								{:else}
 									unconfirmed
 								{/if}

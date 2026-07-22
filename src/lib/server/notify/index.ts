@@ -119,10 +119,15 @@ export interface WatchtowerService {
  * One shared ConfirmElectrumRail/DifficultyFloor instance -- confirm.ts
  * never opens a second Electrum subscription. Best-effort; never throws.
  */
+/** The running watchtower, if any -- lets nudgeWatchtowerRefresh() reach it
+ *  from a route handler without the wallet module importing notify. */
+let activeWatchtower: { refreshNow(): Promise<void> } | null = null;
+
 export function startWatchtowerService(node: NodeClient): WatchtowerService {
 	const rail = railFromNode(node);
 	const watchtower = startWatchtower(node, createWatchtowerHooks());
 	const confirmHooks = createConfirmHooks();
+	activeWatchtower = watchtower;
 
 	const onHeader = (): void => {
 		void handleNewBlock(rail, watchtower.state.floor, watchtower.state.baselineComplete, confirmHooks).catch(
@@ -135,10 +140,20 @@ export function startWatchtowerService(node: NodeClient): WatchtowerService {
 
 	return {
 		stop() {
+			if (activeWatchtower === watchtower) activeWatchtower = null;
 			node.electrum.off('header', onHeader);
 			watchtower.stop();
 		}
 	};
+}
+
+/** Fire-and-forget: watch a just-imported wallet NOW instead of on the next
+ *  5-minute enumeration. Without this, a payment arriving in that window was
+ *  invisible -- and the eventual baseline swallowed it permanently (found
+ *  live on regtest: confirmed receive, empty events table). No-op when the
+ *  watchtower service isn't running (tests, degraded boot). */
+export function nudgeWatchtowerRefresh(): void {
+	void activeWatchtower?.refreshNow();
 }
 
 /** Starts the outbox drain worker (T4) wired to the real channel registry
