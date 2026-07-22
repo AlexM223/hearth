@@ -4,9 +4,16 @@
  * decoding the wallet module already uses, so address decoding logic is
  * never duplicated between modules.
  */
-import { addressToScriptHash, addressToScriptPubKey } from '../node/index.js';
-import { getRawTransaction, type RpcCaller, type RawTransaction, type ScanTxOutResult } from '../node/core/rpc.js';
-import type { ElectrumBalance, ElectrumHistoryItem } from '../node/electrum/client.js';
+import {
+	addressToScriptHash,
+	addressToScriptPubKey,
+	getRawTransaction,
+	type RpcCaller,
+	type RawTransaction,
+	type ScanTxOutResult,
+	type ElectrumBalance,
+	type ElectrumHistoryItem
+} from '../node/index.js';
 import { resolvePrevouts, prevoutKey, type PrevoutRef } from './prevout.js';
 import { addressHistoryCache } from './cache.js';
 import type { AddressTxPage, AddressTxRow, AddressView } from './types.js';

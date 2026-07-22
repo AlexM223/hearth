@@ -5,7 +5,7 @@
  * genuinely independent single-rail datums -- neither has a fallback, so
  * richness is a plain full/none per §1.3's table.
  */
-import { getMempoolInfo, type RpcCaller } from '../node/core/rpc.js';
+import { getMempoolInfo, type RpcCaller } from '../node/index.js';
 import { mempoolSummaryCache, feeHistogramCache, GLOBAL_KEY } from './cache.js';
 import type { FeeHistogramBucket, MempoolSummary, Richness } from './types.js';
 

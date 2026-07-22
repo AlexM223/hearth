@@ -12,7 +12,7 @@ import { listRecentBlocks, type BlocksElectrumRail } from './blocks.js';
 import { getMempoolSummary } from './mempool.js';
 import { getFeeRecommendation, type FeesElectrumRail } from './fees.js';
 import type { BlockSummary, FeeRecommendation, MempoolSummary } from './types.js';
-import type { RpcCaller } from '../node/core/rpc.js';
+import type { RpcCaller } from '../node/index.js';
 
 export interface SnapshotData {
 	recentBlocks: BlockSummary[];

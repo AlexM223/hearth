@@ -7,7 +7,7 @@
  * one call. NOT `gettxout` (nodeview's finding: it only sees the CURRENT
  * UTXO set and would fail for the common already-spent case).
  */
-import { getRawTransaction, type RpcCaller } from '../node/core/rpc.js';
+import { getRawTransaction, type RpcCaller } from '../node/index.js';
 
 export interface PrevoutRef {
 	txid: string;

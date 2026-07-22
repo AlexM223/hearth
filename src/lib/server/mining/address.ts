@@ -10,7 +10,7 @@
  * initialization (DECISIONS.md §2's no-native-ECC-deps posture).
  */
 import * as bitcoin from 'bitcoinjs-lib';
-import type { ChainNetwork } from '../wallet/types.js';
+import type { ChainNetwork } from '../wallet/index.js';
 
 export type Network = bitcoin.networks.Network;
 

@@ -9,7 +9,7 @@
  */
 import { isDecodableAddress } from './address.js';
 import type { SearchResult } from './types.js';
-import type { RpcCaller } from '../node/core/rpc.js';
+import type { RpcCaller } from '../node/index.js';
 
 export const HEIGHT_RE = /^\d{1,9}$/;
 export const HEX64_RE = /^[0-9a-fA-F]{64}$/;

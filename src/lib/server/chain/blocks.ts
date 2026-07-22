@@ -22,7 +22,7 @@ import {
 	type RpcCaller,
 	type BlockVerbose2,
 	type RawTransaction
-} from '../node/core/rpc.js';
+} from '../node/index.js';
 import { decodeBlockHeader, decodeBlockHeaderRange } from './decode.js';
 import { blockDetailCache, blockTxIdsCache } from './cache.js';
 import { getBlockPoolAttribution } from './pool.js';

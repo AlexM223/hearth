@@ -17,13 +17,21 @@ import type { SolveEvent } from './types.js';
 const state = vi.hoisted(() => ({
 	handler: null as ((method: string, params?: unknown[]) => Promise<unknown>) | null
 }));
-vi.mock('../node/index.js', () => ({
-	getNodeClient: () => ({
-		coreRpc: {
-			call: (method: string, params?: unknown[]) => state.handler!(method, params)
-		}
-	})
-}));
+// Preserve every REAL export (getBlockchainInfo etc -- mining/index.ts imports
+// that from this same module) and override only getNodeClient, so the fatal-
+// on-unreachable-Core and network-detection paths still run their real code
+// against the fake coreRpc.call handler below.
+vi.mock('../node/index.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../node/index.js')>();
+	return {
+		...actual,
+		getNodeClient: () => ({
+			coreRpc: {
+				call: (method: string, params?: unknown[]) => state.handler!(method, params)
+			}
+		})
+	};
+});
 
 // Imported AFTER the mock is declared so the mocked module resolves first.
 const {

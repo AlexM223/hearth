@@ -7,7 +7,13 @@
  * independently via allSettled).
  */
 import { ElectrumPool } from './electrum/pool.js';
-import { CoreRpcClient, getBlockchainInfo, getBlockCount, getMempoolInfo, getNetworkInfo } from './core/rpc.js';
+import {
+	CoreRpcClient,
+	getBlockchainInfo,
+	getBlockCount,
+	getMempoolInfo,
+	getNetworkInfo
+} from './core/rpc.js';
 import { addressToScriptHash } from './electrum/scripthash.js';
 import type { ElectrumBalance, ElectrumHeader } from './electrum/client.js';
 import type { CoreRpcConfig, ElectrumConfig } from '../config/index.js';
@@ -36,10 +42,7 @@ export class NodeClient {
 	/** Updated live by the primary Electrum connection's 'header' events (see watcher.ts). */
 	private lastElectrumTip: ElectrumHeader | null = null;
 
-	constructor(
-		private readonly electrumConfig: ElectrumConfig,
-		private readonly coreConfig: CoreRpcConfig
-	) {
+	constructor(electrumConfig: ElectrumConfig, coreConfig: CoreRpcConfig) {
 		this.electrumPool = new ElectrumPool({
 			host: electrumConfig.host,
 			port: electrumConfig.port,
@@ -238,8 +241,32 @@ function formatEta(totalMinutes: number): string {
 	return `~${Math.round(hours / 24)}d`;
 }
 
-export type { ElectrumBalance } from './electrum/client.js';
+export type { ElectrumBalance, ElectrumHistoryItem } from './electrum/client.js';
 export { addressToScriptHash, addressToScriptPubKey } from './electrum/scripthash.js';
+
+// ── Sanctioned low-level read helpers for chain/ and mining/ (DECISIONS.md §4.1) ──
+// chain/* and mining/* need direct Core RPC read primitives beyond the
+// NodeClient facade above (raw block/tx/mempool lookups the explorer and
+// mining engine build their own read models on top of); this is the deliberate,
+// explicit surface for that -- NOT a blanket `export *` from core/rpc.js.
+export {
+	getBlock,
+	getBlockHash,
+	getBlockHeader,
+	getRawTransaction,
+	getTxOut,
+	getMempoolEntry,
+	getMempoolAncestors,
+	getMempoolDescendants,
+	getMempoolInfo,
+	getBlockchainInfo,
+	estimateSmartFee,
+	type RpcCaller,
+	type BlockVerbose2,
+	type RawTransaction,
+	type MempoolEntry,
+	type ScanTxOutResult
+} from './core/rpc.js';
 
 // ---------------------------------------------------------------- singleton
 // Mirrors db/client.ts's openDb()/getDb() idiom: hooks.server.ts constructs

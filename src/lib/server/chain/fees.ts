@@ -11,7 +11,7 @@
  * mempool floor)` in Core's own semantics) and forced monotonic so mixing
  * two estimators never inverts fastest < economy.
  */
-import { estimateSmartFee, getMempoolInfo, type RpcCaller } from '../node/core/rpc.js';
+import { estimateSmartFee, getMempoolInfo, type RpcCaller } from '../node/index.js';
 import { feeRecommendationCache, GLOBAL_KEY } from './cache.js';
 import type { FeeRecommendation, Richness } from './types.js';
 

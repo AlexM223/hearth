@@ -65,7 +65,7 @@ export class LruCache<K, V> {
 
 // ── Named instances per the §1.8(b) table ──────────────────────────────────
 import type { AddressTxRow, BlockDetail, FeeRecommendation, MempoolSummary, PoolAttribution, TxDetail } from './types.js';
-import type { ElectrumHistoryItem } from '../node/electrum/client.js';
+import type { ElectrumHistoryItem } from '../node/index.js';
 
 /** `pool` is never cached (it's viewer-scoped via `isYou`, blocks.ts/tx.ts §2)
  *  -- callers attach it fresh per call on top of the cached row. */

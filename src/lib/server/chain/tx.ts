@@ -13,7 +13,7 @@ import {
 	type RpcCaller,
 	type RawTransaction,
 	type MempoolEntry
-} from '../node/core/rpc.js';
+} from '../node/index.js';
 import { resolvePrevouts, prevoutKey } from './prevout.js';
 import { getBlockPoolAttribution } from './pool.js';
 import { txDetailCache } from './cache.js';
