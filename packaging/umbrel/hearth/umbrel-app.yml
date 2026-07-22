@@ -2,7 +2,7 @@ manifestVersion: 1
 id: hearth
 category: bitcoin
 name: Hearth
-version: "0.2.1"
+version: "0.2.2"
 tagline: Come navigate Bitcoin with me
 description: >-
   Hearth is the always-watching Bitcoin wallet for the people you trust: you
@@ -42,12 +42,15 @@ description: >-
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
 releaseNotes: >-
-  0.2.1 -- small polish from live testing of the invite flow: the
-  one-time invite link now has a real Copy button (it was shown once
-  with "copy it now" and no way to copy but manual selection). The
-  full invite -> come-aboard -> member-home path, light theme, and
-  send-form validation were exercised end to end in this round with
-  no other findings.
+  0.2.2 -- IMPORTANT: this release makes the watchtower actually watch.
+  Full-loop testing on a live regtest node caught two bugs that kept
+  notifications permanently silent: the SPV difficulty floor was never
+  fed live block headers (so every verified-receive check deferred
+  forever), and a freshly imported wallet was not watched for up to five
+  minutes -- any payment arriving in that window was skipped for good.
+  Both fixed and proven live: import a wallet, receive a payment, and
+  "Payment received" now lands in the feed and your configured channels.
+  Also fixes a small spacing glitch in wallet history rows.
 developer: Alex Martinez
 website: https://github.com/AlexM223/hearth
 dependencies:
