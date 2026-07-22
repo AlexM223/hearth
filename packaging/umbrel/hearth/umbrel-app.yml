@@ -2,7 +2,7 @@ manifestVersion: 1
 id: hearth
 category: bitcoin
 name: Hearth
-version: "0.2.2"
+version: "0.2.3"
 tagline: Come navigate Bitcoin with me
 description: >-
   Hearth is the always-watching Bitcoin wallet for the people you trust: you
@@ -42,15 +42,17 @@ description: >-
 
   Runs 100% on your own node -- no cloud, no telemetry, nothing leaves this box.
 releaseNotes: >-
-  0.2.2 -- IMPORTANT: this release makes the watchtower actually watch.
-  Full-loop testing on a live regtest node caught two bugs that kept
-  notifications permanently silent: the SPV difficulty floor was never
-  fed live block headers (so every verified-receive check deferred
-  forever), and a freshly imported wallet was not watched for up to five
-  minutes -- any payment arriving in that window was skipped for good.
-  Both fixed and proven live: import a wallet, receive a payment, and
-  "Payment received" now lands in the feed and your configured channels.
-  Also fixes a small spacing glitch in wallet history rows.
+  0.2.3 -- the foundation release: a full architecture and security audit
+  of the whole app, with every finding fixed. Watchtower: if writing your
+  "payment received" notification ever failed mid-flight, Hearth used to
+  mark it delivered anyway and stay silent forever; it now rolls back and
+  retries on the next block, so an alert can no longer be lost. Account
+  safety: changing your password now signs out every other session, and
+  repeated failed logins are throttled. Every money-moving endpoint
+  (build, sign, broadcast, receive) gained an extra explicit permission
+  check and a wall of new boundary tests -- the test suite grew from
+  1,241 to 1,296 checks, all green on a live regtest node. Plus a faster
+  activity feed and clearer error messages throughout.
 developer: Alex Martinez
 website: https://github.com/AlexM223/hearth
 dependencies:
