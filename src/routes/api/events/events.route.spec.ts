@@ -80,7 +80,7 @@ describe('T9: GET /api/events -- identity + scope wiring', () => {
 
 		// Prove the Member connection did NOT receive it by publishing a second,
 		// broadcast frame afterward and checking THAT is the Member's first frame.
-		publish('health', { kind: 'broadcast' }, { note: 'broadcast-frame' });
+		publish('block', { kind: 'broadcast' }, { note: 'broadcast-frame' });
 		const memberFrame = await nextFrame(member.reader);
 		expect(memberFrame).toContain('broadcast-frame');
 		expect(memberFrame).not.toContain('admin-frame');
@@ -88,7 +88,7 @@ describe('T9: GET /api/events -- identity + scope wiring', () => {
 
 	it('a Guest session registers isAdmin=false -- same as Member for admin-scoped frames', async () => {
 		const guest = (await connect('guest', 301)) as Conn;
-		publish('health', { kind: 'broadcast' }, { note: 'guest-sees-broadcast' });
+		publish('block', { kind: 'broadcast' }, { note: 'guest-sees-broadcast' });
 		const frame = await nextFrame(guest.reader);
 		expect(frame).toContain('guest-sees-broadcast');
 	});
@@ -98,7 +98,7 @@ describe('T9: GET /api/events -- identity + scope wiring', () => {
 		const memberB = (await connect('member', 402)) as Conn;
 
 		publish('wallet', { kind: 'user', userId: 402 }, { note: 'for-402-only' });
-		publish('health', { kind: 'broadcast' }, { note: 'broadcast-for-everyone' });
+		publish('block', { kind: 'broadcast' }, { note: 'broadcast-for-everyone' });
 
 		const aFrame = await nextFrame(memberA.reader); // A owns no scope match on the first publish
 		expect(aFrame).toContain('broadcast-for-everyone');

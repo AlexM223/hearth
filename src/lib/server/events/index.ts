@@ -18,7 +18,6 @@ import { EventEmitter } from 'node:events';
 export type EventTopic =
 	| 'block'
 	| 'mempool'
-	| 'health'
 	| 'wallet'
 	| 'notification'
 	| 'mining'

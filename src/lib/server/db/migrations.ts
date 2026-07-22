@@ -23,6 +23,7 @@ import { migration006Explorer } from './migrations/006_explorer.js';
 import { migration007Mining } from './migrations/007_mining.js';
 import { migration008Notify } from './migrations/008_notify.js';
 import { migration009EventsIndex } from './migrations/009_events_index.js';
+import { migration010DropDeadReservationScripthash } from './migrations/010_drop_dead_reservation_scripthash.js';
 
 const migrations: Migration[] = [
 	migration001Init,
@@ -33,7 +34,8 @@ const migrations: Migration[] = [
 	migration006Explorer,
 	migration007Mining,
 	migration008Notify,
-	migration009EventsIndex
+	migration009EventsIndex,
+	migration010DropDeadReservationScripthash
 ];
 
 /** Applies every migration that hasn't run yet, in id order, inside its own transaction. */

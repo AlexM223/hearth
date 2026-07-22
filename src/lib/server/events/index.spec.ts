@@ -59,11 +59,11 @@ describe('events: liveHub scope filtering (the security boundary, DECISIONS.md Â
 	it('unregister makes a connection stop receiving frames', () => {
 		const conn = makeConn();
 		const unregister = register(conn);
-		publish('health', { kind: 'broadcast' }, {});
+		publish('block', { kind: 'broadcast' }, {});
 		expect(conn.sent).toHaveLength(1);
 
 		unregister();
-		publish('health', { kind: 'broadcast' }, {});
+		publish('block', { kind: 'broadcast' }, {});
 		expect(conn.sent).toHaveLength(1); // unchanged
 	});
 
@@ -120,7 +120,7 @@ describe('events: eventBus', () => {
 		eventBus.once('frame', handler);
 		const conn = makeConn();
 		const unregister = register(conn);
-		publish('health', { kind: 'broadcast' }, { ok: true });
+		publish('block', { kind: 'broadcast' }, { ok: true });
 		expect(handler).toHaveBeenCalledTimes(1);
 		unregister();
 	});

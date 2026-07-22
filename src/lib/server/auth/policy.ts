@@ -35,8 +35,7 @@ export const API_POLICY: Rule[] = [
 	{ pattern: /^\/api\/invites(\/|$)/, min: 'owner' },
 	{ pattern: /^\/api\/members(\/|$)/, min: 'owner' },
 	{ pattern: /^\/api\/household\/summary$/, min: 'guest' }, // aggregate only if opted in, or Owner (§3.6)
-	{ pattern: /^\/api\/settings(\/|$)/, min: 'owner' },
-	{ pattern: /^\/api\/node(\/|$)/, min: 'guest' } // read health; writes re-checked 'owner' in handler
+	{ pattern: /^\/api\/settings(\/|$)/, min: 'owner' }
 ];
 
 /** Resolve the policy rule for a path+method. Returns null => deny-by-default. */

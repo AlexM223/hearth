@@ -41,11 +41,13 @@ describe('migration 004: unified wallet schema', () => {
 			'psbt_draft_inputs',
 			'psbt_draft_signers',
 			'wallet_snapshots',
-			'scripthash_status',
 			'ledger_wallet_registrations'
 		]) {
 			expect(names).toContain(t);
 		}
+		// scripthash_status shipped with this migration but was dropped, dormant
+		// and never wired up, by migration 010 (hearth-7vg) -- see
+		// 010_drop_dead_reservation_scripthash.spec.ts for its coverage.
 	});
 
 	it('is idempotent -- re-running migrations on an existing DB never throws', () => {
@@ -62,15 +64,6 @@ describe('migration 004: unified wallet schema', () => {
 		const pkCols = cols.filter((c) => c.pk > 0).map((c) => c.name);
 		expect(pkCols).toEqual(['wallet_id']);
 		expect(cols.map((c) => c.name)).not.toContain('wallet_kind');
-	});
-
-	it('scripthash_status has no wallet_kind column (single wallet_id FK)', () => {
-		const db = freshDb();
-		const cols = (db.prepare('PRAGMA table_info(scripthash_status)').all() as { name: string }[]).map(
-			(c) => c.name
-		);
-		expect(cols).not.toContain('wallet_kind');
-		expect(cols).toContain('wallet_id');
 	});
 
 	it('enforces the kind CHECK constraint', () => {

@@ -543,8 +543,13 @@ export function updateDraftPsbt(draftId: number, psbt: string, status: DraftStat
 		.run(psbt, status, draftId);
 }
 
-/** The AUTHORITATIVE reservation source (§5.4): outpoints locked by an in-flight
- *  draft of this user. An indexed query -- never "parse every stored PSBT". */
+/** THE double-spend reservation mechanism (§5.4; DECISIONS.md §4.8's
+ *  2026-07-21 amended note): outpoints locked by an in-flight draft of this
+ *  user. An indexed query -- never "parse every stored PSBT". There is no
+ *  dedicated reservation row/column backing this -- `utxos.reserved_by_draft_id`
+ *  was that idea's leftover DDL and was dropped as dead code by migration 010
+ *  (hearth-krx); this join over `psbt_draft_inputs` x in-flight `psbt_drafts`
+ *  is, and has always been, the real and only guard. See docs/SCHEMA.md §4. */
 export function reservedOutpoints(userId: number): Set<string> {
 	const rows = getDb()
 		.prepare(
