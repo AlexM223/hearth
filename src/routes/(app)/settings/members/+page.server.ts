@@ -82,7 +82,7 @@ export const actions: Actions = {
 	revokeInvite: async ({ request }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
-		if (!Number.isInteger(id)) return fail(400, { error: 'invalid invite id' });
+		if (!Number.isInteger(id)) return fail(400, { error: 'that invite link could not be identified -- refresh the page and try again' });
 		revokeInvite(id);
 		return {};
 	},
@@ -91,7 +91,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		const role = String(data.get('role') ?? '');
-		if (!Number.isInteger(id)) return fail(400, { error: 'invalid member id' });
+		if (!Number.isInteger(id)) return fail(400, { error: 'that member could not be identified -- refresh the page and try again' });
 		try {
 			changeMemberRole(id, role);
 			return {};
@@ -105,7 +105,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		const walletPolicy = (data.get('walletPolicy') === 'transfer' ? 'transfer' : 'remove') as OffboardWalletPolicy;
-		if (!Number.isInteger(id)) return fail(400, { error: 'invalid member id' });
+		if (!Number.isInteger(id)) return fail(400, { error: 'that member could not be identified -- refresh the page and try again' });
 		try {
 			offboardMember(locals.user!.id, id, walletPolicy);
 			return {};

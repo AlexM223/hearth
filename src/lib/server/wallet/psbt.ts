@@ -188,7 +188,7 @@ export async function buildPsbt(
 			updateCursors(walletId, wallet.receiveCursor, Math.max(wallet.changeCursor, changeIndex + 1));
 		}
 
-		const review = buildReviewFromSelection(wallet, engine, draftId, selection, psbtBase64);
+		const review = buildReviewFromSelection(wallet, engine, selection, psbtBase64);
 		return { draftId, psbtBase64, review };
 	});
 }
@@ -250,7 +250,6 @@ async function constructPsbt(
 function buildReviewFromSelection(
 	wallet: Wallet,
 	engine: ScriptEngine,
-	draftId: number,
 	selection: Selection,
 	psbtBase64: string
 ): ReviewSummary {

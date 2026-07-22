@@ -51,8 +51,3 @@ export function coinbaseMaturity(height: number, tipHeight: number): CoinbaseMat
 		etaHours: Math.ceil((blocksRemaining * BLOCK_MINUTES) / 60)
 	};
 }
-
-/** True when a coinbase output at `height` is NOT yet spendable at `tipHeight`. */
-export function isImmatureCoinbase(height: number, tipHeight: number): boolean {
-	return !coinbaseMaturity(height, tipHeight).mature;
-}

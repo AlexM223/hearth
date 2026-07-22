@@ -67,9 +67,6 @@ export function encryptUserSecretField(plain: string): string {
 export function getInstanceMeta(key: string): string | null {
 	return getMeta(key);
 }
-export function setInstanceMeta(key: string, value: string): void {
-	setMeta(key, value);
-}
 
 export function getInstanceSecret(key: string): string | null {
 	const row = getDb().prepare('SELECT value_enc FROM instance_secrets WHERE key = ?').get(key) as

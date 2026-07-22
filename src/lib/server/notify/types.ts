@@ -75,7 +75,3 @@ export interface NotificationChannelPlugin {
 	/** Pure DB read, no network -- greys the toggle. */
 	isConfigured(userId: number): boolean;
 }
-
-/** Per-relay/per-request bound so one black-holing endpoint can never wedge
- *  the sequential single-flight outbox drain (cairn-49qw, cairn-a2b6). */
-export const REQUEST_TIMEOUT_MS = 10_000;

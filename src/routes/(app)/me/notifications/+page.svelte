@@ -5,6 +5,13 @@
 	// API route directly (no form submit / page reload) so the result shows
 	// inline next to the button it was requested from.
 	import type { PageProps } from './$types';
+	import type {
+		RedactedEmailConfig,
+		RedactedTelegramConfig,
+		RedactedNtfyConfig,
+		RedactedNostrConfig,
+		RedactedWebhookConfig
+	} from '$lib/server/notify/config/channelConfig.js';
 
 	let { data, form }: PageProps = $props();
 
@@ -26,16 +33,14 @@
 	function channelData(id: string) {
 		return data.channels.find((c) => c.id === id)!;
 	}
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const email = $derived(channelData('email').config as any);
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const telegram = $derived(channelData('telegram').config as any);
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const ntfy = $derived(channelData('ntfy').config as any);
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const nostr = $derived(channelData('nostr').config as any);
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const webhook = $derived(channelData('webhook').config as any);
+	// channelData() returns the general RedactedChannelConfig union (the loader
+	// builds it from a variable channel id); each accessor here is only ever
+	// called with the matching literal id above, so the shape is known.
+	const email = $derived(channelData('email').config as RedactedEmailConfig);
+	const telegram = $derived(channelData('telegram').config as RedactedTelegramConfig);
+	const ntfy = $derived(channelData('ntfy').config as RedactedNtfyConfig);
+	const nostr = $derived(channelData('nostr').config as RedactedNostrConfig);
+	const webhook = $derived(channelData('webhook').config as RedactedWebhookConfig);
 
 	let testBusy = $state<Record<string, boolean>>({});
 	let testResult = $state<Record<string, { ok: boolean; error?: string } | null>>({});

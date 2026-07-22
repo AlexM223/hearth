@@ -28,10 +28,6 @@ export const MAX_POOL_SIZE = 4;
 
 export type ElectrumLane = 'interactive' | 'background';
 
-export function backgroundLaneWidth(poolSize: number): number {
-	return Math.max(1, poolSize - 1);
-}
-
 export class ElectrumPool extends EventEmitter {
 	private readonly clients: ElectrumClient[];
 	private readonly primary: ElectrumClient;

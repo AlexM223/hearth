@@ -12,7 +12,6 @@ import { InsufficientFundsError, InvalidFeeRateError } from './errors.js';
 
 export const TX_OVERHEAD_VSIZE = 11;
 export const DUST_RELAY_FEE_RATE = 3;
-export const RBF_SEQUENCE = 0xfffffffd;
 export const MAX_FEE_RATE = 1000;
 export const COINBASE_MATURITY = 100;
 

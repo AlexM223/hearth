@@ -224,11 +224,7 @@ async function scanChain(
 }
 
 /** Full wallet scan: both chains in parallel, UTXOs + detailed tx deltas. */
-export async function scanWallet(
-	wallet: Wallet,
-	rail: ScanRail,
-	tipHeight: number | null
-): Promise<ScanResult> {
+export async function scanWallet(wallet: Wallet, rail: ScanRail): Promise<ScanResult> {
 	const engine = selectEngine(wallet);
 	const [external, internal] = await Promise.all([
 		scanChain(engine, 0, rail),

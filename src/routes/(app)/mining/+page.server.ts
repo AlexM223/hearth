@@ -78,7 +78,8 @@ export const actions = {
 		const data = await request.formData();
 		const raw = data.get('walletId');
 		const walletId = raw && String(raw).length > 0 ? Number(raw) : null;
-		if (walletId !== null && !Number.isInteger(walletId)) return fail(400, { error: 'invalid wallet id' });
+		if (walletId !== null && !Number.isInteger(walletId))
+			return fail(400, { error: 'that payout wallet selection was not recognized -- pick a wallet from the list' });
 		try {
 			setPayoutWallet(user.id, walletId);
 		} catch (e) {

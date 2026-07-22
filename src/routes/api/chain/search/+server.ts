@@ -10,7 +10,7 @@ import { getNodeClient } from '$lib/server/node/index.js';
 export async function GET(event: RequestEvent) {
 	requireRole(event.locals.user, 'guest');
 	const q = event.url.searchParams.get('q');
-	if (!q || !q.trim()) throw error(400, 'q is required');
+	if (!q || !q.trim()) throw error(400, 'search query is required -- pass ?q=<height, txid, block hash, or address>');
 
 	const node = getNodeClient();
 	const result = await classifySearch(q, node);

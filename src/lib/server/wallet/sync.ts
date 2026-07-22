@@ -50,7 +50,7 @@ export function syncWallet(
 		if (!wallet) return;
 		// Lazy expiry sweep on the sync lane (never a naked SSE-path timer, §1).
 		sweepExpiredDrafts(walletId);
-		const result = await scanWallet(wallet, node.electrum, node.tipHeight ?? null);
+		const result = await scanWallet(wallet, node.electrum);
 		persistResult(wallet, result);
 	})().finally(() => {
 		if (inflight.get(walletId) === run) inflight.delete(walletId);

@@ -13,7 +13,6 @@
  * payload actually hashes to (typo help). Every descriptor Hearth emits
  * (buildDescriptor / walletToDescriptor) carries a freshly computed checksum.
  */
-import { HDKey } from '@scure/bip32';
 import type {
 	ChainNetwork,
 	MultisigScriptType,

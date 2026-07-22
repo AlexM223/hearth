@@ -16,7 +16,7 @@ import { HDKey } from '@scure/bip32';
 import { base58, base58check, bech32, bech32m, hex } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { ripemd160 } from '@noble/hashes/legacy.js';
-import type { ChainNetwork, ScriptType, SingleScriptType } from './types.js';
+import type { ChainNetwork, ScriptType } from './types.js';
 import { WalletError } from './errors.js';
 
 const b58check = base58check(sha256);

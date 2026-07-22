@@ -45,3 +45,6 @@ vite.config.ts.timestamp-*
 /packaging/umbrel/hearth/UPDATE-PATH.md
 /scripts/qa-m1.mjs
 
+
+# Internal architecture manual -- stays local like /docs/
+/MANUAL.md

@@ -49,7 +49,7 @@ interface ResolvedSmtp {
 	requireTLS: boolean;
 }
 
-function resolveSmtp(userId: number, cfg: EmailUserConfig): ResolvedSmtp | null {
+function resolveSmtp(cfg: EmailUserConfig): ResolvedSmtp | null {
 	if (cfg.smtp?.host) {
 		// bug fix (hearth-skg.11): `decryptUserSecretField(userId,'email','smtp')`
 		// looked up a top-level `smtp` field, but the encrypted value actually
@@ -90,7 +90,7 @@ function resolveSmtp(userId: number, cfg: EmailUserConfig): ResolvedSmtp | null 
 async function sendTo(userId: number, payload: NotificationPayload): Promise<ChannelSendResult> {
 	const cfg = config(userId);
 	if (!cfg?.address) return { ok: false, retryable: false, error: 'no destination email address configured' };
-	const smtp = resolveSmtp(userId, cfg);
+	const smtp = resolveSmtp(cfg);
 	if (!smtp) return { ok: false, retryable: false, error: 'no SMTP relay configured on this instance' };
 
 	const pgpOn = false; // PGP body encryption is a documented follow-up (not yet implemented)
@@ -140,6 +140,6 @@ export const email: NotificationChannelPlugin = {
 	isConfigured(userId) {
 		const cfg = config(userId);
 		if (!cfg?.address) return false;
-		return resolveSmtp(userId, cfg) !== null;
+		return resolveSmtp(cfg) !== null;
 	}
 };
