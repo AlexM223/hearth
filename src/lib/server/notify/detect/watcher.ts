@@ -293,13 +293,14 @@ function fireReceived(
 	hooks: WatchtowerHooks
 ): void {
 	const event: ReceivedEvent = { wallet: w, txid, amountSats, height };
+	// The hook's writes (events / notification_queue rows) MUST be atomic with
+	// the ledger claim (cairn-fzqpe) -- a thrown error here must propagate so
+	// withTransaction rolls back the claim too, leaving alreadyNotified false
+	// and the next scripthash event free to retry. Swallowing it here would
+	// permanently lose the notification while still marking the tx notified.
 	const won = withTransaction((db) => {
 		if (!claimReceived(db, w.walletId, w.userId, txid, amountSats, height)) return false;
-		try {
-			hooks.onReceived?.(db, event);
-		} catch (e) {
-			logWarn('watchtower', { event: 'on_received_hook_threw', txid, err: String(e) });
-		}
+		hooks.onReceived?.(db, event);
 		return true;
 	});
 	if (!won) return;

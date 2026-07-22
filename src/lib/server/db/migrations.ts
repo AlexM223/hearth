@@ -22,6 +22,7 @@ import { migration005InvitesMembers } from './migrations/005_invites_members.js'
 import { migration006Explorer } from './migrations/006_explorer.js';
 import { migration007Mining } from './migrations/007_mining.js';
 import { migration008Notify } from './migrations/008_notify.js';
+import { migration009EventsIndex } from './migrations/009_events_index.js';
 
 const migrations: Migration[] = [
 	migration001Init,
@@ -31,7 +32,8 @@ const migrations: Migration[] = [
 	migration005InvitesMembers,
 	migration006Explorer,
 	migration007Mining,
-	migration008Notify
+	migration008Notify,
+	migration009EventsIndex
 ];
 
 /** Applies every migration that hasn't run yet, in id order, inside its own transaction. */

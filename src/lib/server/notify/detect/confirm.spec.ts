@@ -177,6 +177,40 @@ describe('T2: confirmation milestones (WATCHTOWER.md §1.6)', () => {
 		expect(milestoneEvents.length).toBe(0);
 	});
 
+	// Regression (audit-verified, cairn-fzqpe): onMilestone used to run inside
+	// a try/catch that swallowed a hook failure, so markMilestone's claim
+	// committed even though the in-app notification write never happened --
+	// permanently losing the milestone alert with no retry.
+	it('a throwing onMilestone hook rolls back markMilestone too -- lastMilestone unchanged, retries and fires on the next block', async () => {
+		withTransaction((db) => claimReceived(db, wallet.id, userId, V.txid, 150000, V.height));
+		let hookCalls = 0;
+		const hooks: ConfirmHooks = {
+			milestonesForUser: () => [1, 3],
+			onMilestone: () => {
+				hookCalls++;
+				throw new Error('simulated hook write failure mid-INSERT');
+			}
+		};
+		await handleNewBlock(fakeRail({ async getTx() { return { confirmations: 3 }; } }), floorAtTip(), true, hooks);
+		expect(hookCalls).toBe(1);
+		// markMilestone must NOT have been committed alongside the failed hook
+		// write -- lastMilestone stays at 1, never silently advanced to 3 with
+		// nothing ever recorded.
+		expect(getLedgerRow(wallet.id, userId, V.txid)?.lastMilestone).toBe(1);
+
+		// The next block (healthy hook) retries and fires successfully.
+		const milestoneEvents: MilestoneEvent[] = [];
+		await handleNewBlock(
+			fakeRail({ async getTx() { return { confirmations: 3 }; } }),
+			floorAtTip(),
+			true,
+			{ milestonesForUser: () => [1, 3], afterMilestone: (e) => milestoneEvents.push(e) }
+		);
+		expect(milestoneEvents.length).toBe(1);
+		expect(milestoneEvents[0].milestone).toBe(3);
+		expect(getLedgerRow(wallet.id, userId, V.txid)?.lastMilestone).toBe(3);
+	});
+
 	it('never throws even when every rail call rejects', async () => {
 		withTransaction((db) => claimReceived(db, wallet.id, userId, V.txid, 150000, V.height));
 		trackPendingInbound(wallet.id, userId, 'deadbeef', 1);
@@ -303,6 +337,40 @@ describe('T2: reorg reconciliation (WATCHTOWER.md §1.6.1)', () => {
 
 	it('DEFAULT_MILESTONES is [1] (matching cairn, avoiding fatigue)', () => {
 		expect(DEFAULT_MILESTONES).toEqual([1]);
+	});
+
+	// Regression (audit-verified, cairn-fzqpe): onReplaced used to run inside a
+	// try/catch that swallowed a hook failure, so markReplaced's claim
+	// committed even though the in-app notification write never happened --
+	// permanently losing the "payment reversed" alert with no retry.
+	it('a throwing onReplaced hook rolls back markReplaced too -- row stays notified, retries and fires on the next pass', async () => {
+		withTransaction((db) => claimReceived(db, wallet.id, userId, V.txid, 150000, V.height));
+		const rail = fakeRail({
+			async getTx() {
+				throw new Error('No such mempool or blockchain transaction');
+			},
+			async getHistory() {
+				return [];
+			}
+		});
+		let hookCalls = 0;
+		await handleNewBlock(rail, floorAtTip(), true, {
+			onReplaced: () => {
+				hookCalls++;
+				throw new Error('simulated hook write failure mid-INSERT');
+			}
+		});
+		expect(hookCalls).toBe(1);
+		// markReplaced must NOT have been committed alongside the failed hook
+		// write -- the row stays 'notified', never silently advanced to
+		// 'replaced' with nothing ever recorded.
+		expect(getLedgerRow(wallet.id, userId, V.txid)?.status).toBe('notified');
+
+		// The next pass (healthy hook) retries and fires successfully.
+		const replacedEvents: ReplacedEvent[] = [];
+		await handleNewBlock(rail, floorAtTip(), true, { afterReplaced: (e) => replacedEvents.push(e) });
+		expect(replacedEvents.length).toBe(1);
+		expect(getLedgerRow(wallet.id, userId, V.txid)?.status).toBe('replaced');
 	});
 
 	// Regression: Bitcoin Core commonly restores an invalidated block's

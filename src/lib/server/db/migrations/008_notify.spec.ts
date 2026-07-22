@@ -7,7 +7,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { runMigrations } from '../migrations.js';
+import { runMigrations, listMigrations } from '../migrations.js';
 
 function freshDb(): DatabaseSync {
 	const db = new DatabaseSync(':memory:');
@@ -45,11 +45,14 @@ describe('migration 008: notify tables', () => {
 	it('applies cleanly on top of an already-migrated M0-M5 DB (does not touch earlier migrations)', () => {
 		const db = new DatabaseSync(':memory:');
 		db.exec('PRAGMA foreign_keys = ON;');
-		runMigrations(db); // full run including 008, simulating "M2/M3 already landed"
+		runMigrations(db); // full run including 008 (and any later migrations), simulating "M2/M3 already landed"
 		const appliedIds = (db.prepare('SELECT id FROM _migrations').all() as { id: number }[])
 			.map((r) => r.id)
 			.sort((a, b) => a - b);
-		expect(appliedIds).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+		// Compared against the FULL registered list rather than a hardcoded
+		// [1..8] -- this test only cares that 008 landed cleanly alongside
+		// whatever else has landed since, not that 008 was the last migration.
+		expect(appliedIds).toEqual(listMigrations().map((m) => m.id));
 	});
 
 	it('notified_txids.status accepts NULL (baselined/legacy silent record)', () => {

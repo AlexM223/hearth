@@ -404,6 +404,43 @@ describe('T1: wallet-vanished mid-flight (TOCTOU, cairn-mo36)', () => {
 	});
 });
 
+describe('T1: onReceived hook failure must roll back the claim (regression, audit-verified)', () => {
+	it('a throwing onReceived hook rolls back the WHOLE transaction -- claim not committed, retries and fires later', async () => {
+		const state = baseState();
+		state.floor.acceptHeader(V.height, V.headerHex);
+		const rail = fakeRail({
+			async getHistory() {
+				return [{ tx_hash: V.txid, height: V.height }];
+			}
+		});
+
+		// The hook throws mid-INSERT (e.g. a broken events/notification_queue
+		// write) -- handleScripthashChange must still never throw itself...
+		await expect(
+			handleScripthashChange(state, rail, sh0, {
+				onReceived: () => {
+					throw new Error('simulated hook write failure mid-INSERT');
+				}
+			})
+		).resolves.toBeUndefined();
+
+		// ...but the ledger claim must NOT have been committed alongside the
+		// failed hook write (cairn-fzqpe): alreadyNotified must still be false,
+		// i.e. no row at all (this txid was never seen 'pending' first).
+		expect(getLedgerRow(wallet.id, userId, V.txid)).toBeNull();
+
+		// The next scripthash event (rail unchanged, hook now healthy) retries
+		// detection from scratch and fires the notification exactly once.
+		const events: ReceivedEvent[] = [];
+		await handleScripthashChange(state, rail, sh0, {
+			onReceived: (_db, e) => events.push(e)
+		});
+		expect(events).toHaveLength(1);
+		expect(events[0].txid).toBe(V.txid);
+		expect(getLedgerRow(wallet.id, userId, V.txid)?.status).toBe('notified');
+	});
+});
+
 describe('enumerateAndSubscribe: proactive baseline (regtest-found first-payment swallow)', () => {
 	// subscribeScripthash never emits the initial status, so before this fix
 	// the FIRST status-change per scripthash was consumed by the baseline

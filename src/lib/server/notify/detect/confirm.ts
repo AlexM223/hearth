@@ -31,7 +31,6 @@ import { watchDepthFor, type VerboseTx } from './watcher.js';
 
 export const CONFIRM_THRESHOLD = 1;
 export const DEFAULT_MILESTONES: readonly number[] = [1];
-export const AVAILABLE_MILESTONES: readonly number[] = [1, 3, 6];
 export const REORG_RECHECK_DEPTH = 6;
 
 const NOT_FOUND_PATTERN = /not found|no such|unknown transaction|missing transaction|txn-mempool-conflict/i;
@@ -155,6 +154,10 @@ async function reconcileDisappeared(
 		return;
 	}
 
+	// The hook's writes must be atomic with the ledger claim (cairn-fzqpe) --
+	// a thrown error must propagate so withTransaction rolls back markReplaced
+	// too, leaving this row retryable on the next block/reconcile pass rather
+	// than permanently marked 'replaced' with no notification ever recorded.
 	const won = withTransaction((db) => {
 		if (!markReplaced(row.walletId, row.userId, row.txid)) return false;
 		const event: ReplacedEvent = {
@@ -164,11 +167,7 @@ async function reconcileDisappeared(
 			wasConfirmed,
 			silent: false
 		};
-		try {
-			hooks.onReplaced?.(db, event);
-		} catch (e) {
-			logWarn('watchtower', { event: 'on_replaced_hook_threw', txid: row.txid, err: String(e) });
-		}
+		hooks.onReplaced?.(db, event);
 		return true;
 	});
 	if (won) {
@@ -200,7 +199,6 @@ async function processUnconfirmedRow(
 async function processReorgWindowRow(
 	rail: ConfirmElectrumRail,
 	floor: DifficultyFloor,
-	tipHeight: number,
 	row: NotifiedTxidRow,
 	hooks: ConfirmHooks
 ): Promise<void> {
@@ -236,6 +234,10 @@ async function processReorgWindowRow(
 	const verified = await spvVerifyConfirmed(rail, floor, row.txid, row.confirmedHeight);
 	if (!verified) return; // defer -- retries on the next block
 
+	// The hook's writes must be atomic with the ledger claim (cairn-fzqpe) --
+	// a thrown error must propagate so withTransaction rolls back markMilestone
+	// too, leaving this row retryable on the next block rather than permanently
+	// marked at this milestone with no notification ever recorded.
 	const won = withTransaction((db) => {
 		if (!markMilestone(row.walletId, row.userId, row.txid, milestone, row.confirmedHeight!)) return false;
 		const event: MilestoneEvent = {
@@ -245,11 +247,7 @@ async function processReorgWindowRow(
 			milestone,
 			confirmations
 		};
-		try {
-			hooks.onMilestone?.(db, event);
-		} catch (e) {
-			logWarn('watchtower', { event: 'on_milestone_hook_threw', txid: row.txid, err: String(e) });
-		}
+		hooks.onMilestone?.(db, event);
 		return true;
 	});
 	if (won) {
@@ -291,7 +289,7 @@ export async function handleNewBlock(
 		const reorgWindow = selectReorgWindowRows(tipHeight, REORG_RECHECK_DEPTH);
 		for (const row of reorgWindow) {
 			try {
-				await processReorgWindowRow(rail, floor, tipHeight, row, hooks);
+				await processReorgWindowRow(rail, floor, row, hooks);
 			} catch (e) {
 				logWarn('watchtower', { event: 'process_reorg_window_row_threw', txid: row.txid, err: String(e) });
 			}
