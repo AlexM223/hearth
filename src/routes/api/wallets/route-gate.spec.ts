@@ -53,7 +53,11 @@ function evt(
 	userId: number | null,
 	params: Record<string, string>,
 	body?: unknown,
-	role: 'owner' | 'member' | 'guest' = 'guest'
+	// Default 'member': T8 below exercises the resource-level ownership gate
+	// (a member who simply isn't THIS wallet's owner -> 404), which is
+	// distinct from the org-role floor (a Guest -> 403, covered explicitly by
+	// the M3 section further down, which always passes its own role).
+	role: 'owner' | 'member' | 'guest' = 'member'
 ): any {
 	return {
 		locals: { user: userId == null ? null : { id: userId, username: 'u' + userId, role, mustResetPassword: false } },

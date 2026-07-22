@@ -98,8 +98,12 @@ process.on('unhandledRejection', (reason) => {
 	);
 });
 
-function jsonError(status: number, error: string): Response {
-	return new Response(JSON.stringify({ error }), {
+function jsonError(status: number, message: string): Response {
+	// Normalized to {message} (audit P2#3) -- SvelteKit's own error() helper
+	// serializes {message: ...}; these hooks-level denials now match that
+	// shape so callers never need a second envelope parser for the edge vs.
+	// handler case.
+	return new Response(JSON.stringify({ message }), {
 		status,
 		headers: { 'content-type': 'application/json' }
 	});

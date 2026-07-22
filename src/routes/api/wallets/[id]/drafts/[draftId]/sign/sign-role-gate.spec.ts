@@ -43,7 +43,11 @@ function fundingNode(wallet: Wallet, coinSats: number): BuildNode {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function evt(userId: number | null, params: Record<string, string>, body: unknown, role: 'owner' | 'guest' | 'member' = 'guest'): any {
+// Default 'member': most calls below just need to clear the org-role floor
+// (ownership is decided separately, by DB row lookup) -- the explicit
+// 'member' outsider test and the M3-style Guest denial each still pass
+// their own role.
+function evt(userId: number | null, params: Record<string, string>, body: unknown, role: 'owner' | 'guest' | 'member' = 'member'): any {
 	return {
 		locals: { user: userId == null ? null : { id: userId, username: 'u' + userId, role, mustResetPassword: false } },
 		params,

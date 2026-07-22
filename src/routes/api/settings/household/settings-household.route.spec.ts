@@ -55,4 +55,21 @@ describe('T12: POST /api/settings/household', () => {
 	it('anon is denied', async () => {
 		await expectStatus(() => POST(evt(null, {})), 401);
 	});
+
+	// Audit P2#8 (hearth-276): householdName was stored unbounded -- a
+	// runaway/garbage value could bloat storage and blow out the greeting
+	// layout it's shown in on every page.
+	describe('P2#8: householdName length cap', () => {
+		it('a name over 120 chars is rejected with 400 and NOT persisted', async () => {
+			const before = getHouseholdNameSetting();
+			await expectStatus(() => POST(evt('owner', { householdName: 'x'.repeat(121) })), 400);
+			expect(getHouseholdNameSetting()).toBe(before);
+		});
+
+		it('a name at exactly the 120-char boundary is accepted', async () => {
+			const name = 'x'.repeat(120);
+			await expectStatus(() => POST(evt('owner', { householdName: name })), 200);
+			expect(getHouseholdNameSetting()).toBe(name);
+		});
+	});
 });

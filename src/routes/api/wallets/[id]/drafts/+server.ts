@@ -15,10 +15,12 @@ import {
 } from '$lib/server/wallet/index.js';
 import { httpStatusFor } from '$lib/server/wallet/errors.js';
 import { getNodeClient } from '$lib/server/node/index.js';
+import { requireRole } from '$lib/server/auth/index.js';
 
 function requireOwner(event: RequestEvent): { userId: number; walletId: number } {
-	const user = event.locals.user;
-	if (!user) throw error(401, 'sign in first');
+	// Explicit org-role floor (defense in depth) before the resource-level
+	// ownership check below -- matches /api/wallets's requireRole('member').
+	const user = requireRole(event.locals.user, 'member');
 	const walletId = Number(event.params.id);
 	const wallet = getWallet(user.id, walletId);
 	// Non-owner (or absent) => 404 with NO PSBT-bearing content (no leak, §5.3).

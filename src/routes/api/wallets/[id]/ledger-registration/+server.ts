@@ -14,10 +14,12 @@ import {
 	listLedgerRegistrations,
 	saveLedgerRegistration
 } from '$lib/server/wallet/index.js';
+import { requireRole } from '$lib/server/auth/index.js';
 
 function requireOwner(event: RequestEvent): number {
-	const user = event.locals.user;
-	if (!user) throw error(401, 'sign in first');
+	// Explicit org-role floor (defense in depth) before the resource-level
+	// ownership check below -- matches /api/wallets's requireRole('member').
+	const user = requireRole(event.locals.user, 'member');
 	const walletId = Number(event.params.id);
 	if (resolveWalletRole(user.id, getWallet(user.id, walletId)) !== 'owner') throw error(404, 'wallet not found');
 	return walletId;

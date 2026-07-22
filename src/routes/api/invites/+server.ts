@@ -14,6 +14,46 @@ interface CreateBody {
 	maxUses?: number;
 }
 
+/** A year is generously long for a household invite link; anything past
+ *  this is almost certainly a unit mistake (seconds instead of ms) rather
+ *  than an intentional "keep this open forever" choice -- and "forever" is
+ *  already expressible by omitting expiresInMs entirely. */
+const MAX_EXPIRES_IN_MS = 365 * 24 * 60 * 60 * 1000;
+
+/** An invite is a household-scale primitive (one captain onboarding a
+ *  handful of members/guests), not a public sign-up link -- this caps
+ *  runaway/garbage input, not legitimate use. */
+const MAX_INVITE_USES = 1000;
+
+/** Shape/range-validate the untrusted body BEFORE it ever reaches
+ *  createInvite's `new Date(Date.now() + expiresInMs)` (audit P2#8): a
+ *  non-numeric expiresInMs used to poison that call into NaN, and
+ *  `new Date(NaN).toISOString()` throws a raw RangeError -- surfacing as an
+ *  uncaught 500 instead of a 400 with a plain-language message. */
+function assertValidCreateBody(body: CreateBody): void {
+	if (body.expiresInMs != null) {
+		if (typeof body.expiresInMs !== 'number' || !Number.isFinite(body.expiresInMs) || body.expiresInMs <= 0) {
+			throw error(400, 'expiresInMs must be a positive number of milliseconds');
+		}
+		if (body.expiresInMs > MAX_EXPIRES_IN_MS) {
+			throw error(400, 'expiresInMs cannot exceed one year');
+		}
+	}
+	if (body.maxUses != null) {
+		if (
+			typeof body.maxUses !== 'number' ||
+			!Number.isFinite(body.maxUses) ||
+			!Number.isInteger(body.maxUses) ||
+			body.maxUses <= 0
+		) {
+			throw error(400, 'maxUses must be a positive integer');
+		}
+		if (body.maxUses > MAX_INVITE_USES) {
+			throw error(400, `maxUses cannot exceed ${MAX_INVITE_USES}`);
+		}
+	}
+}
+
 export function GET(event: RequestEvent) {
 	requireRole(event.locals.user, 'owner');
 	// Never include the code -- hash-only storage, and it was never persisted.
@@ -41,6 +81,7 @@ export async function POST(event: RequestEvent) {
 		throw error(400, 'expected a JSON body');
 	}
 	if (typeof body.role !== 'string') throw error(400, 'role is required');
+	assertValidCreateBody(body);
 
 	const input: CreateInviteInput = {
 		role: body.role,

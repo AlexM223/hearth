@@ -15,10 +15,14 @@ import {
 	resolveWalletRole
 } from '$lib/server/wallet/index.js';
 import { getNodeClient } from '$lib/server/node/index.js';
+import { requireRole } from '$lib/server/auth/index.js';
 
+// Explicit org-role floor (defense in depth, matching /api/wallets's own
+// requireRole('member') -- Layer 1 in hooks.server.ts already requires
+// 'member' for every /api/wallets/** path, but this keeps the route safe
+// even if that policy line were ever dropped).
 function requireUser(event: RequestEvent): { id: number } {
-	const user = event.locals.user;
-	if (!user) throw error(401, 'sign in first');
+	const user = requireRole(event.locals.user, 'member');
 	return { id: user.id };
 }
 

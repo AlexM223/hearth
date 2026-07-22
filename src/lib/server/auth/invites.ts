@@ -121,7 +121,14 @@ const VALID_ROLES: readonly InviteRole[] = ['member', 'guest'];
 /** Create + persist a new invite. The DB CHECK (role IN ('member','guest'))
  *  is a hard invariant, but we validate here too for a clean error message
  *  instead of a raw constraint-violation exception (§1.1's "cannot invite an
- *  Owner" note -- a leaked link must never be able to mint an Owner). */
+ *  Owner" note -- a leaked link must never be able to mint an Owner).
+ *
+ *  Shape/range validation of `expiresInMs`/`maxUses` against untrusted HTTP
+ *  input lives at the route (routes/api/invites/+server.ts's
+ *  assertValidCreateBody) rather than here -- this service function is also
+ *  used internally with a deliberately out-of-range `expiresInMs` (e.g. a
+ *  negative value to mint an already-expired invite for tests), which a
+ *  service-level range check would wrongly reject. */
 export function createInvite(createdBy: number, input: CreateInviteInput): CreatedInvite {
 	if (!VALID_ROLES.includes(input.role as InviteRole)) {
 		throw new InviteError(

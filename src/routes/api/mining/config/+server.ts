@@ -7,13 +7,17 @@
 import { json, error, type RequestEvent } from '@sveltejs/kit';
 import { requireRole } from '$lib/server/auth/index.js';
 import { getAdminMiningView } from '$lib/server/mining/readModels.js';
+import { logError } from '$lib/server/log.js';
 
 export async function GET(event: RequestEvent) {
 	requireRole(event.locals.user, 'owner');
 	try {
 		const view = await getAdminMiningView();
 		return json(view);
-	} catch {
+	} catch (e) {
+		// Log before the 503 (audit P2#9) -- otherwise an engine bug here is
+		// silently swallowed and undiagnosable in production.
+		logError('mining', { event: 'admin_mining_view_failed', err: String(e) });
 		throw error(503, 'admin mining view unavailable');
 	}
 }

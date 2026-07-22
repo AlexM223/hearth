@@ -93,4 +93,51 @@ describe('T4: /api/invites route gate', () => {
 		await expectStatus(() => revokeInviteRoute(evt('member', { id: '1' })), 403);
 		await expectStatus(() => revokeInviteRoute(evt(null, { id: '1' })), 401);
 	});
+
+	// Audit P2#8 (hearth-276): expiresInMs/maxUses used to pass through
+	// unchecked, poisoning createInvite's `new Date(Date.now() + expiresInMs)`
+	// into a raw RangeError (an uncaught 500) whenever expiresInMs wasn't a
+	// finite positive number.
+	describe('P2#8: expiresInMs/maxUses validation', () => {
+		it('a non-numeric expiresInMs (e.g. a string) is a 400, not a 500', async () => {
+			const body = (await expectStatus(
+				() => createInviteRoute(evt('owner', {}, { role: 'member', expiresInMs: 'soon' })),
+				400
+			)) as { message?: string };
+			expect(body?.message).toMatch(/expiresInMs/);
+		});
+
+		it('a zero or negative expiresInMs is a 400', async () => {
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', expiresInMs: 0 })), 400);
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', expiresInMs: -1000 })), 400);
+		});
+
+		it('an expiresInMs beyond the one-year cap is a 400', async () => {
+			const overCap = 365 * 24 * 60 * 60 * 1000 + 1;
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', expiresInMs: overCap })), 400);
+		});
+
+		it('a boundary-valid expiresInMs (exactly one year) is accepted', async () => {
+			const oneYear = 365 * 24 * 60 * 60 * 1000;
+			await expectStatus(
+				() => createInviteRoute(evt('owner', {}, { role: 'member', expiresInMs: oneYear })),
+				201
+			);
+		});
+
+		it('a non-integer, zero, negative, or over-cap maxUses is a 400', async () => {
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', maxUses: 1.5 })), 400);
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', maxUses: 0 })), 400);
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', maxUses: -5 })), 400);
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', maxUses: 1001 })), 400);
+		});
+
+		it('a boundary-valid maxUses (exactly the 1000 cap) is accepted', async () => {
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member', maxUses: 1000 })), 201);
+		});
+
+		it('omitting expiresInMs/maxUses entirely (defaults) still works', async () => {
+			await expectStatus(() => createInviteRoute(evt('owner', {}, { role: 'member' })), 201);
+		});
+	});
 });

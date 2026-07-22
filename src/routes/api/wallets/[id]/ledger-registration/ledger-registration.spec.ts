@@ -14,7 +14,7 @@ import type { Wallet } from '$lib/server/wallet/index.js';
 import { GET, POST } from './+server.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function evt(userId: number | null, params: Record<string, string>, body?: unknown, role: 'owner' | 'guest' = 'owner'): any {
+function evt(userId: number | null, params: Record<string, string>, body?: unknown, role: 'owner' | 'guest' | 'member' = 'owner'): any {
 	return {
 		locals: { user: userId == null ? null : { id: userId, username: 'u', role, mustResetPassword: false } },
 		params,
@@ -93,11 +93,19 @@ describe('GET/POST /api/wallets/[id]/ledger-registration', () => {
 		expect(body2.registrations[0].policyHmac).toBe('bb'.repeat(32));
 	});
 
-	it('a non-owner is refused on both GET and POST', async () => {
-		await expectStatus(() => GET(evt(viewerId, { id: String(wallet.id) }, undefined, 'guest')), 404);
+	it('a non-owner (member) is refused on both GET and POST', async () => {
+		await expectStatus(() => GET(evt(viewerId, { id: String(wallet.id) }, undefined, 'member')), 404);
+		await expectStatus(
+			() => POST(evt(viewerId, { id: String(wallet.id) }, { masterFp: '11111111', policyHmac: 'aa'.repeat(32), policyName: 'x' }, 'member')),
+			404
+		);
+	});
+
+	it('a Guest is refused with 403 (org-role floor, before the ownership check even runs)', async () => {
+		await expectStatus(() => GET(evt(viewerId, { id: String(wallet.id) }, undefined, 'guest')), 403);
 		await expectStatus(
 			() => POST(evt(viewerId, { id: String(wallet.id) }, { masterFp: '11111111', policyHmac: 'aa'.repeat(32), policyName: 'x' }, 'guest')),
-			404
+			403
 		);
 	});
 
