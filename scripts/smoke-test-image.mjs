@@ -147,16 +147,26 @@ async function main() {
 	const healthDeadline = Date.now() + 60_000;
 	let health;
 	for (;;) {
+		let threw = null;
 		try {
 			const res = await fetch(`http://127.0.0.1:${port}/api/health`);
 			health = res.status;
 		} catch (e) {
-			fail(`GET /api/health threw: ${e}`);
+			// A refused/reset connection means node hasn't bound the port inside
+			// the container yet -- on a cold/loaded CI runner that can outlast any
+			// flat sleep (seen twice: runner busy right after the QEMU arm64
+			// build; logs empty because node hadn't even started). Same deadline
+			// as a 503: retry, only fail on timeout or container exit.
+			threw = e;
 		}
-		if (health === 200) break;
-		if (health !== 503) fail(`GET /api/health returned ${health}, expected 200`);
+		if (!threw && health === 200) break;
+		if (!threw && health !== 503) fail(`GET /api/health returned ${health}, expected 200`);
 		if (Date.now() >= healthDeadline) {
-			fail('GET /api/health still 503 (booting) after 60s -- boot never completed');
+			fail(
+				threw
+					? `GET /api/health still unreachable after 60s (last error: ${threw}) -- port never bound`
+					: 'GET /api/health still 503 (booting) after 60s -- boot never completed'
+			);
 		}
 		const still = run('docker', ['inspect', '-f', '{{.State.Running}}', containerName]);
 		if (still.stdout.trim() !== 'true') fail('container exited while waiting for /api/health');
