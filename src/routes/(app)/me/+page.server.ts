@@ -4,7 +4,7 @@
  * password since Settings is Owner-only.
  */
 import { fail } from '@sveltejs/kit';
-import { updateOwnProfile, getOwnPrefs, setOwnTheme, AuthError } from '$lib/server/auth/index.js';
+import { updateOwnProfile, getOwnPrefs, setOwnTheme, setSessionCookie, AuthError } from '$lib/server/auth/index.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -15,7 +15,7 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ request, locals }) => {
+	updateProfile: async ({ request, locals, cookies, url }) => {
 		const data = await request.formData();
 		const displayName = String(data.get('displayName') ?? '');
 		const currentPassword = String(data.get('currentPassword') ?? '') || undefined;
@@ -27,7 +27,17 @@ export const actions: Actions = {
 		}
 
 		try {
-			await updateOwnProfile(locals.user!.id, { displayName, currentPassword, newPassword });
+			const { newSession } = await updateOwnProfile(locals.user!.id, {
+				displayName,
+				currentPassword,
+				newPassword
+			});
+			// A password change just destroyed every session for this user,
+			// including the one this request came in on -- reissue the cookie
+			// against the fresh session so the caller stays logged in.
+			if (newSession) {
+				setSessionCookie(cookies, newSession.token, newSession.expiresAt, url);
+			}
 			return { saved: true };
 		} catch (e) {
 			if (e instanceof AuthError) return fail(400, { error: e.message });

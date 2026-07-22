@@ -6,8 +6,7 @@
  * display_name/username when unset so a fresh instance always has a name to
  * greet with.
  */
-import { getDb } from '../db/index.js';
-import { getMeta, setMeta } from '../db/meta.js';
+import { getDb, getMeta, setMeta } from '../db/index.js';
 
 const HOUSEHOLD_NAME_KEY = 'household.name';
 

@@ -6,7 +6,7 @@
  * anyone else's profile from here.
  */
 import { json, error, type RequestEvent } from '@sveltejs/kit';
-import { requireRole, updateOwnProfile, AuthError } from '$lib/server/auth/index.js';
+import { requireRole, updateOwnProfile, setSessionCookie, AuthError } from '$lib/server/auth/index.js';
 
 interface ProfileBody {
 	displayName?: string | null;
@@ -23,11 +23,17 @@ export async function POST(event: RequestEvent) {
 		throw error(400, 'expected a JSON body');
 	}
 	try {
-		await updateOwnProfile(user.id, {
+		const { newSession } = await updateOwnProfile(user.id, {
 			displayName: body.displayName,
 			currentPassword: body.currentPassword,
 			newPassword: body.newPassword
 		});
+		// A password change just destroyed every session for this user,
+		// including the one this request authenticated with -- reissue the
+		// cookie against the fresh session so the caller stays logged in.
+		if (newSession) {
+			setSessionCookie(event.cookies, newSession.token, newSession.expiresAt, event.url);
+		}
 		return json({ ok: true });
 	} catch (e) {
 		if (e instanceof AuthError) throw error(400, e.message);

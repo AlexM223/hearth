@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDb, closeDb, runMigrations, getDb } from '../db/index.js';
 import { createSession, getSessionUser } from './session.js';
+import { resetLoginThrottle } from './login-throttle.js';
+import * as passwordModule from './password.js';
 import {
 	AuthError,
 	bootstrapAdminFromEnv,
@@ -13,10 +15,13 @@ import {
 beforeEach(() => {
 	const db = openDb(':memory:');
 	runMigrations(db);
+	resetLoginThrottle();
 });
 
 afterEach(() => {
 	closeDb();
+	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 describe('auth: first-run admin bootstrap (DECISIONS.md §4.3)', () => {
@@ -82,6 +87,26 @@ describe('auth: password login', () => {
 		const user = await loginWithPassword('ADMIN', 'install-password-123');
 		expect(user.username).toBe('admin');
 	});
+
+	it('burns a scrypt cycle on the unknown-username path too (no timing oracle)', async () => {
+		// Structural assertion, not a wall-clock timing test (that would be
+		// flaky): an unknown username must still invoke verifyPassword once,
+		// against the fixed dummy hash, so it costs the same as a known
+		// username + wrong password instead of short-circuiting near-instantly.
+		const spy = vi.spyOn(passwordModule, 'verifyPassword');
+
+		await expect(loginWithPassword('nobody-at-all', 'whatever')).rejects.toMatchObject({
+			code: 'bad_credentials'
+		});
+		expect(spy).toHaveBeenCalledTimes(1);
+
+		spy.mockClear();
+
+		await expect(loginWithPassword('admin', 'wrong-password')).rejects.toMatchObject({
+			code: 'bad_credentials'
+		});
+		expect(spy).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('auth: forced credential reset', () => {
@@ -132,5 +157,71 @@ describe('auth: forced credential reset', () => {
 		await completeForcedCredentialReset(adminId, { username: 'alex', password: 'a-real-password-1' });
 
 		expect(getSessionUser(token)).toBeNull();
+	});
+});
+
+describe('auth: login throttle', () => {
+	beforeEach(async () => {
+		await bootstrapAdminFromEnv({ HEARTH_ADMIN_PASSWORD: 'install-password-123' });
+	});
+
+	it('blocks the 6th failed attempt within the window, and lifts once the window elapses', async () => {
+		vi.useFakeTimers();
+
+		for (let i = 0; i < 5; i++) {
+			await expect(loginWithPassword('admin', 'wrong-password')).rejects.toMatchObject({
+				code: 'bad_credentials'
+			});
+		}
+		// 6th attempt is throttled -- even with the CORRECT password.
+		await expect(loginWithPassword('admin', 'install-password-123')).rejects.toMatchObject({
+			code: 'too_many_attempts'
+		});
+
+		// Still inside the 15-minute window: still throttled.
+		vi.advanceTimersByTime(10 * 60_000);
+		await expect(loginWithPassword('admin', 'install-password-123')).rejects.toMatchObject({
+			code: 'too_many_attempts'
+		});
+
+		// Past the window: the throttle lifts and the correct password succeeds.
+		vi.advanceTimersByTime(5 * 60_000 + 1);
+		const user = await loginWithPassword('admin', 'install-password-123');
+		expect(user.username).toBe('admin');
+	});
+
+	it('a successful login resets the failure counter', async () => {
+		for (let i = 0; i < 4; i++) {
+			await expect(loginWithPassword('admin', 'wrong-password')).rejects.toMatchObject({
+				code: 'bad_credentials'
+			});
+		}
+		await expect(loginWithPassword('admin', 'install-password-123')).resolves.toBeTruthy();
+
+		// The counter reset on success -- another 4 failures still shouldn't trip the throttle.
+		for (let i = 0; i < 4; i++) {
+			await expect(loginWithPassword('admin', 'wrong-password')).rejects.toMatchObject({
+				code: 'bad_credentials'
+			});
+		}
+		await expect(loginWithPassword('admin', 'install-password-123')).resolves.toBeTruthy();
+	});
+
+	it('throttles independently per username', async () => {
+		getDb()
+			.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+			.run('other', 'scrypt:16384:8:1:salt:hash', 'member');
+
+		for (let i = 0; i < 5; i++) {
+			await expect(loginWithPassword('admin', 'wrong-password')).rejects.toMatchObject({
+				code: 'bad_credentials'
+			});
+		}
+		await expect(loginWithPassword('admin', 'install-password-123')).rejects.toMatchObject({
+			code: 'too_many_attempts'
+		});
+
+		// A different username has its own, unaffected counter.
+		await expect(loginWithPassword('other', 'whatever')).rejects.toMatchObject({ code: 'bad_credentials' });
 	});
 });

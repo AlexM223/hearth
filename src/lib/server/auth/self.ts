@@ -4,9 +4,9 @@
  * password and display name -- so "no Settings for non-Owners" never traps
  * a member out of their own password). `/api/me/**`, gated `authed`+self-scope.
  */
-import { getDb, withTransaction } from '../db/index.js';
-import { getMeta, setMeta } from '../db/meta.js';
+import { getDb, withTransaction, getMeta, setMeta } from '../db/index.js';
 import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from './password.js';
+import { createSession, destroyUserSessions } from './session.js';
 import { AuthError } from './users.js';
 
 export interface UpdateProfileInput {
@@ -17,10 +17,21 @@ export interface UpdateProfileInput {
 	newPassword?: string;
 }
 
+export interface UpdateProfileResult {
+	/** Set only when the password changed. Every OTHER session for this user
+	 *  was just destroyed (a leaked/left-open session must not survive a
+	 *  password change), including the one the caller made this request with
+	 *  -- so a fresh one is minted here for the caller to re-issue as their
+	 *  cookie. Mirrors completeForcedCredentialReset's rotate-then-reissue
+	 *  pattern in users.ts. */
+	newSession: { token: string; expiresAt: Date } | null;
+}
+
 /** Update the caller's own display name and/or password. A password change
  *  requires the current password (defense against a hijacked/left-open
- *  session); hashing happens BEFORE the transaction (async, off the tx path). */
-export async function updateOwnProfile(userId: number, input: UpdateProfileInput): Promise<void> {
+ *  session); hashing happens BEFORE the transaction (async, off the tx path).
+ *  A password change also rotates sessions -- see UpdateProfileResult. */
+export async function updateOwnProfile(userId: number, input: UpdateProfileInput): Promise<UpdateProfileResult> {
 	const row = getDb().prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as
 		| { password_hash: string }
 		| undefined;
@@ -48,6 +59,15 @@ export async function updateOwnProfile(userId: number, input: UpdateProfileInput
 			db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userId);
 		}
 	});
+
+	if (!newHash) return { newSession: null };
+
+	// The old password may have been shared with (or guessed by) whoever holds
+	// another session -- destroy every session for this user, then mint a
+	// fresh one so the caller's own login survives the rotation.
+	destroyUserSessions(userId);
+	const { token, expiresAt } = createSession(userId);
+	return { newSession: { token, expiresAt } };
 }
 
 export interface OwnPrefs {

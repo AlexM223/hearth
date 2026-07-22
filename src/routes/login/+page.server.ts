@@ -3,7 +3,7 @@ import { AuthError, createSession, loginWithPassword, setSessionCookie } from '$
 import type { Actions } from './$types';
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url }) => {
+	default: async ({ request, cookies, url, getClientAddress }) => {
 		const data = await request.formData();
 		const username = String(data.get('username') ?? '').trim();
 		const password = String(data.get('password') ?? '');
@@ -14,7 +14,7 @@ export const actions: Actions = {
 
 		let userId: number;
 		try {
-			const user = await loginWithPassword(username, password);
+			const user = await loginWithPassword(username, password, { ip: getClientAddress() });
 			userId = user.id;
 		} catch (e) {
 			if (e instanceof AuthError) return fail(400, { error: e.message, username });

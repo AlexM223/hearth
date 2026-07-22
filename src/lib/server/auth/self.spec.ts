@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { openDb, getDb, closeDb, runMigrations } from '../db/index.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { createSession, getSessionUser } from './session.js';
 import { updateOwnProfile, getOwnPrefs, setOwnTheme } from './self.js';
 import { AuthError } from './users.js';
 
@@ -62,6 +63,30 @@ describe('T12: updateOwnProfile', () => {
 			display_name: string | null;
 		};
 		expect(row.display_name).toBeNull();
+	});
+
+	it('a display-name-only update does not touch sessions', async () => {
+		const { token } = createSession(userId);
+		const result = await updateOwnProfile(userId, { displayName: 'Mum' });
+		expect(result.newSession).toBeNull();
+		expect(getSessionUser(token)).not.toBeNull();
+	});
+
+	it('a password change destroys every OTHER session but hands back a fresh one for the caller', async () => {
+		const other = createSession(userId);
+		expect(getSessionUser(other.token)).not.toBeNull();
+
+		const result = await updateOwnProfile(userId, {
+			currentPassword: ORIGINAL_PASSWORD,
+			newPassword: 'a brand new passphrase'
+		});
+
+		// The pre-existing session is gone...
+		expect(getSessionUser(other.token)).toBeNull();
+		// ...but the caller gets a working replacement.
+		expect(result.newSession).not.toBeNull();
+		expect(getSessionUser(result.newSession!.token)).not.toBeNull();
+		expect(getSessionUser(result.newSession!.token)!.id).toBe(userId);
 	});
 });
 

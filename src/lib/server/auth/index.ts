@@ -36,6 +36,8 @@ export {
 	type AuthUser
 } from './users.js';
 
+export { resetLoginThrottle } from './login-throttle.js';
+
 export {
 	householdGreetingName,
 	setHouseholdName,
@@ -51,6 +53,7 @@ export {
 	getOwnPrefs,
 	setOwnTheme,
 	type UpdateProfileInput,
+	type UpdateProfileResult,
 	type OwnPrefs
 } from './self.js';
 

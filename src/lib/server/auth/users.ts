@@ -9,6 +9,7 @@
 import { getDb, withTransaction } from '../db/index.js';
 import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from './password.js';
 import { destroyUserSessions, type SessionUser } from './session.js';
+import { checkThrottle, recordFailure, clearThrottle } from './login-throttle.js';
 import { logWarn } from '../log.js';
 import type { Role } from './index.js';
 
@@ -53,22 +54,70 @@ export function getUserById(id: number): AuthUser | null {
 	return row ? toAuthUser(row) : null;
 }
 
+// A fixed dummy hash, verified against on the unknown-username path so that
+// path costs one scrypt run too -- otherwise "no such user" returns near-
+// instantly while "wrong password" burns ~100-300ms on a real user's hash,
+// and that gap is a user-enumeration timing oracle. Computed once, lazily
+// (hashPassword is async, so it can't be a plain top-level constant), off a
+// fixed password + fresh random salt; the salt makes the hash itself useless
+// to an attacker even if it somehow leaked.
+let dummyHashPromise: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+	if (!dummyHashPromise) dummyHashPromise = hashPassword('dummy password never assigned to any account');
+	return dummyHashPromise;
+}
+
 /**
  * Verify a username + password and return the user. Uses the SAME error for
  * an unknown username and a wrong password, so a login failure never reveals
- * which accounts exist.
+ * which accounts exist -- and burns the same scrypt cost either way, so the
+ * *response time* doesn't reveal it either (see getDummyHash above).
+ *
+ * Throttled per DECISIONS.md: `keys` covers the username and, when the
+ * caller can supply one, the client IP -- either racking up MAX_ATTEMPTS
+ * failures locks out further attempts for a cooldown (login-throttle.ts).
  */
-export async function loginWithPassword(username: string, password: string): Promise<AuthUser> {
+export async function loginWithPassword(
+	username: string,
+	password: string,
+	opts: { ip?: string } = {}
+): Promise<AuthUser> {
 	const normalized = username.trim().toLowerCase();
+	const keys = [`user:${normalized}`, ...(opts.ip ? [`ip:${opts.ip}`] : [])];
+
+	for (const key of keys) {
+		const status = checkThrottle(key);
+		if (status.blocked) {
+			logWarn('auth', { event: 'login_throttled', username: normalized });
+			const retryMinutes = Math.max(1, Math.ceil(status.retryAfterMs / 60_000));
+			throw new AuthError(
+				`Invalid username or password. Try again in ${retryMinutes} minute(s).`,
+				'too_many_attempts'
+			);
+		}
+	}
+
 	const row = getDb()
 		.prepare('SELECT id, username, password_hash, role, must_reset_password FROM users WHERE username = ?')
 		.get(normalized) as UserRow | undefined;
 
-	if (!row || !(await verifyPassword(password, row.password_hash))) {
+	let ok: boolean;
+	if (row) {
+		ok = await verifyPassword(password, row.password_hash);
+	} else {
+		// Unknown username: still burn a scrypt cycle, against the fixed dummy
+		// hash, so this path costs the same as a wrong password on a real user.
+		await verifyPassword(password, await getDummyHash());
+		ok = false;
+	}
+
+	if (!row || !ok) {
+		for (const key of keys) recordFailure(key);
 		logWarn('auth', { event: 'login_failed', username: normalized });
 		throw new AuthError('Invalid username or password.', 'bad_credentials');
 	}
 
+	for (const key of keys) clearThrottle(key);
 	return toAuthUser(row);
 }
 

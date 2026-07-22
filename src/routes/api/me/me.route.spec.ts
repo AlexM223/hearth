@@ -26,7 +26,11 @@ beforeEach(async () => {
 function evt(role: 'member' | 'guest' | null, body?: unknown): any {
 	return {
 		locals: { user: role == null ? null : { id: memberId, username: 'mum', role, mustResetPassword: false } },
-		request: { json: async () => body }
+		request: { json: async () => body },
+		// A password change reissues the session cookie (T12/hearth-ja1) --
+		// the profile route needs these even though most other requests don't.
+		cookies: { set: () => {}, get: () => undefined, delete: () => {} },
+		url: new URL('http://localhost/api/me/profile')
 	};
 }
 
